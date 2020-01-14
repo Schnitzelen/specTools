@@ -1,0 +1,12 @@
+Name, Abbreviation, Solvent, ExtinctionCoefficient, Wavelength, Reference
+Fluorescein, Flu, 0.1M NaOH, 88000, 493, http://www.fluorophores.tugraz.at/substance/1017
+Rhodamine 6G, Rho6G, EtOH, 116000, 530, http://www.fluorophores.tugraz.at/substance/504
+Rhodamine B, RhoB, EtOH, 106000, 543, http://www.fluorophores.tugraz.at/substance/505
+ATTO 488, AT488, PBS, 90000, 500, https://www.atto-tec.com/attotecshop/product_info.php?language=en&info=p99_ATTO-488.html
+ATTO 532, AT532, PBS, 115000, 532, https://www.atto-tec.com/attotecshop/product_info.php?language=en&info=p102_ATTO-532.html
+Abberior STAR 440SXP, ST440, PBS, 33000, 432, https://www.sigmaaldrich.com/life-science/cell-biology/detection/abberior-dyes.html
+Abberior STAR 470SXP, ST470, PBS, 29000, 467, https://www.sigmaaldrich.com/life-science/cell-biology/detection/abberior-dyes.html
+Abberior STAR 488, ST488, PBS, 65000, 503, https://www.sigmaaldrich.com/life-science/cell-biology/detection/abberior-dyes.html
+Abberior STAR 512, ST512, PBS, 85000, 511, https://www.sigmaaldrich.com/life-science/cell-biology/detection/abberior-dyes.html
+Abberior STAR 520, ST520, PBS, 42500, 522, DOI: 10.1088/2050-6120/3/4/042004
+Nile Red, NR, MeOH, 45000, 552, DOI: 10.1016/j.bbamem.2006.07.010
