@@ -106,6 +106,10 @@ classdef readIfx < handle
         end
         function correctInstrumentArtifacts(obj)
             % Determine type of scan
+            IsAnisotropyScan = any(strcmp(obj.Data.Properties.VariableNames, 'Anisotropy'));
+            if IsAnisotropyScan
+                return
+            end
             IsEmissionScan = any(strcmp(obj.Data.Properties.VariableNames, 'EmissionWavelength'));
             IsExcitationScan = any(strcmp(obj.Data.Properties.VariableNames, 'ExcitationWavelength'));
             assert(sum([IsEmissionScan, IsExcitationScan]) > 0);
@@ -200,6 +204,10 @@ classdef readIfx < handle
         end
         function integrateCorrectedIntensity(obj)
             % Determine type of scan
+            IsAnisotropyScan = any(strcmp(obj.Data.Properties.VariableNames, 'Anisotropy'));
+            if IsAnisotropyScan
+                return
+            end
             IsEmissionScan = any(strcmp(obj.Data.Properties.VariableNames, 'EmissionWavelength'));
             IsExcitationScan = any(strcmp(obj.Data.Properties.VariableNames, 'ExcitationWavelength'));
             assert(sum([IsEmissionScan, IsExcitationScan]) > 0);
@@ -226,6 +234,10 @@ classdef readIfx < handle
             end
         end
         function normalizeCorrectedIntensity(obj)
+            IsAnisotropyScan = any(strcmp(obj.Data.Properties.VariableNames, 'Anisotropy'));
+            if IsAnisotropyScan
+                return
+            end
             obj.Data.NormalizedCorrectedIntensity = obj.Data.CorrectedIntensity / max(obj.Data.CorrectedIntensity);    
         end
         function estimateSpectralRange(obj)
@@ -235,6 +247,10 @@ classdef readIfx < handle
                 end
             end
             % Determine type of scan
+            IsAnisotropyScan = any(strcmp(obj.Data.Properties.VariableNames, 'Anisotropy'));
+            if IsAnisotropyScan
+                return
+            end
             IsEmissionScan = any(strcmp(obj.Data.Properties.VariableNames, 'EmissionWavelength'));
             IsExcitationScan = any(strcmp(obj.Data.Properties.VariableNames, 'ExcitationWavelength'));
             assert(sum([IsEmissionScan, IsExcitationScan]) > 0);

@@ -25,7 +25,8 @@ classdef readRhe < handle
             obj.AbsoluteFileName = AbsoluteFileName;
             obj.readInfoFromFileName()
             obj.importData()
-            obj.determineViscosity()
+            obj.determineStabileViscosity()
+            %obj.plotRaw()
         end
         function readInfoFromFileName(obj)
             [~, FileName, ~] = fileparts(obj.AbsoluteFileName);
@@ -66,18 +67,39 @@ classdef readRhe < handle
         end
         function importData(obj)
             obj.Data = readtable(obj.AbsoluteFileName);
+            % Remove data points with wrong format
+            Format = 'dd-MM-yyyy HH:mm:ss';
+            CorrectFormatIdx = cellfun(@(x) length(x) == length(Format), obj.Data.DateTime);
+            obj.Data = obj.Data(CorrectFormatIdx, :);
+            % Convert data points
+            obj.Data.DateTime = datetime(obj.Data.DateTime, 'InputFormat', Format);
         end
-        function determineViscosity(obj)
+        function determineStabileViscosity(obj)
             Viscosity = obj.Data.Viscosity;
             % Detect stabile part of measurement
             SD = NaN(length(Viscosity), 1);
             for i = 1:length(Viscosity)
                 SD(i) = std(Viscosity(i:end));
             end
-            Difference = diff(SD);
-            Idx = min(find(Difference > 0));
+            Difference = abs(diff(diff(SD))); % curvature
+            Idx = Difference < 0.0001;
+            Idx = [false; false; Idx]; % add to indices that were removed by diff
             % Calculate mean viscosity from stabile part
-            obj.Viscosity = mean(Viscosity(Idx:end));
+            obj.Viscosity.Value = mean(Viscosity(Idx));
+            obj.Viscosity.Unit = 'mPaS';
+            obj.Data.StabileIndex = Idx;
+        end
+        function Fig = plotRaw(obj)
+            Fig = figure;
+            hold on
+            xlabel('time');
+            ylabel('viscosity (mPaS)');
+            StabileIdx = obj.Data.StabileIndex;
+            DateTime = obj.Data.DateTime;
+            Viscosity = obj.Data.Viscosity;
+            plot(DateTime(StabileIdx), Viscosity(StabileIdx), 'bo');
+            plot(DateTime(~StabileIdx), Viscosity(~StabileIdx), 'ro');
+            hold off
         end
     end
 end
