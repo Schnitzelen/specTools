@@ -45,9 +45,14 @@ function specTools(Path)
             writetable(Qy.Results, fullfile(Path, 'qy_results.csv'));
         end
     end
-    % Two-photon absorption
+    % Two-photon excitation
     TPAFiles = dir(fullfile(Path, '/data/*_2pa_*.txt'));
     if ~isempty(TPAFiles)
         TPA = wrap2PEx(Path);
+    end
+    % Fluorescence lifetime image analysis
+    FLIMFiles = dir(fullfile(Path, 'data', '*_FLIM_*'));
+    if ~isempty(FLIMFiles)
+        FLIM = wrapFLIM(Path);
     end
 end

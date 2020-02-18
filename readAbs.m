@@ -143,58 +143,63 @@ classdef readAbs < handle
             assert(~isempty(obj.Data), 'No data could be located within file');
         end
         function correctInstrumentArtifacts(obj)
-            % Correct offset around 600 nm
-%             WavelengthLow = 600;
-%             WavelengthHigh = 603;
-%             if obj.Data.Wavelength(end) < WavelengthHigh
-%                 Index = obj.Data.Wavelength > WavelengthLow;
-%                 obj.Data(Index, :) = [];
-%             else
-%                 XLow = obj.Data.Wavelength(find(obj.Data.Wavelength == WavelengthHigh));
-%                 YLow = obj.Data.Absorption(find(obj.Data.Wavelength == WavelengthHigh));
-%                 XHigh = obj.Data.Wavelength(find(obj.Data.Wavelength == WavelengthHigh + 2));
-%                 YHigh = obj.Data.Absorption(find(obj.Data.Wavelength == WavelengthHigh + 2));
-%                 Fit = polyfit([XLow, XHigh], [YLow, YHigh], 1);
-%                 Offset = ( Fit(1) * obj.Data.Wavelength(find(obj.Data.Wavelength == WavelengthLow)) + Fit(2) ) - obj.Data.Absorption(find(obj.Data.Wavelength == WavelengthLow));
-%                 BelowWavelengthLow = obj.Data.Wavelength <= WavelengthLow;
-%                 obj.Data.Absorption(BelowWavelengthLow) = obj.Data.Absorption(BelowWavelengthLow) + Offset;
-%                 AboveWavelengthLow = obj.Data.Wavelength > WavelengthLow;
-%                 BelowWavelengthHigh = obj.Data.Wavelength < WavelengthHigh;
-%                 Index = and(AboveWavelengthLow, BelowWavelengthHigh);
-%                 obj.Data.Absorption(Index) = Fit(1) .* obj.Data.Wavelength(Index) + Fit(2);
-%             end
-            % Correct offset around 380 nm (lamp change)
-            OutsideArtefactUpperLimit = 380 + 1;
-            OutsideArtefactLowerLimit = strsplit(obj.Info{1}.InstrumentParameters.LampChange, ' ');
-            OutsideArtefactLowerLimit = str2double(OutsideArtefactLowerLimit{1});
-            OutsideArtefactLowerLimit = OutsideArtefactLowerLimit - 1;
+            % Fetch variables to work on
             Wavelength = obj.Data.Wavelength;
             Absorption = obj.Data.Absorption;
-            IsAboveArtefact = Wavelength > OutsideArtefactLowerLimit;
-            IsBelowArtefact = Wavelength < OutsideArtefactUpperLimit;
-            AffectedIdx = and(IsAboveArtefact, IsBelowArtefact);
+            % Correct discontinuity at 601 nm
+            AffectedIdx = Wavelength <= 601;
+            if any(AffectedIdx) && length(Absorption) > length(AffectedIdx)
+                PerturbedIdx = find(AffectedIdx);
+                NonPerturbedAbs = Absorption(max(PerturbedIdx) + 1);
+                PerturbedAbs = Absorption(max(PerturbedIdx));
+                Offset = NonPerturbedAbs - PerturbedAbs;
+                Absorption(PerturbedIdx) = Absorption(PerturbedIdx) + Offset;
+%                 % Check correction
+%                 plot(Wavelength, obj.Data.Absorption)
+%                 hold on
+%                 plot(Wavelength, Absorption)
+%                 hold off
+            end
+            % Correct lamp change around 380 nm
+            AffectedWavelength.Max = 380;
+            AffectedWavelength.Min = str2double(obj.Info{1}.InstrumentParameters.LampChange(1:end-3));
+            AffectedIdx = AffectedWavelength.Min < Wavelength & Wavelength <= AffectedWavelength.Max;
             if any(AffectedIdx)
                 % Choose correction method based on wavelength
-                IsInBeginning = OutsideArtefactLowerLimit < min(Wavelength);
-                IsInEnd = max(Wavelength) < OutsideArtefactUpperLimit;
+                IsInBeginning = AffectedWavelength.Min < min(Wavelength);
+                IsInEnd = max(Wavelength) < AffectedWavelength.Max;
                 if IsInBeginning
-                    PerturbedWavelengthIdx = find(Wavelength < OutsideArtefactUpperLimit);
-                    FittingIdx = max(PerturbedWavelengthIdx) + 1 : max(PerturbedWavelengthIdx) + 5;
+                    PerturbedIdx = find(Wavelength <= AffectedWavelength.Max);
+                    NonPerturbedIdx = max(PerturbedWavelengthIdx) + 1 : max(PerturbedWavelengthIdx) + 5;
                 elseif IsInEnd
-                    PerturbedWavelengthIdx = find(OutsideArtefactLowerLimit < Wavelength);
-                    FittingIdx = min(PerturbedWavelengthIdx) - 5 : min(PerturbedWavelengthIdx) - 1;
+                    PerturbedIdx = find(AffectedWavelength.Min <= Wavelength);
+                    NonPerturbedIdx = min(PerturbedWavelengthIdx) - 5 : min(PerturbedWavelengthIdx) - 1;
                 else
-                    PerturbedWavelengthIdx = find(AffectedIdx);
-                    FittingIdx = [min(PerturbedWavelengthIdx) - 1, max(PerturbedWavelengthIdx) + 1];
+                    PerturbedIdx = find(AffectedIdx);
+                    NonPerturbedIdx = [min(PerturbedIdx) - 1, max(PerturbedIdx) + 1];
                 end
-                % Do linear interpolation to correct
-                X = Wavelength(FittingIdx);
-                Y = Absorption(FittingIdx);
-                Fit = polyfit(X, Y, 1);
-                for i = 1:length(PerturbedWavelengthIdx)
-                    Absorption(PerturbedWavelengthIdx(i)) = Fit(1) * Wavelength(PerturbedWavelengthIdx(i)) + Fit(2);
+                % Do linear interpolation to add offset
+                PerturbedX = Wavelength([min(PerturbedIdx), max(PerturbedIdx)]);
+                PerturbedY = Absorption([min(PerturbedIdx), max(PerturbedIdx)]);
+                PerturbedFit = polyfit(PerturbedX, PerturbedY, 1);
+                NonPerturbedX = Wavelength(NonPerturbedIdx);
+                NonPerturbedY = Absorption(NonPerturbedIdx);
+                NonPerturbedFit = polyfit(NonPerturbedX, NonPerturbedY, 1);
+                for i = 1:length(PerturbedIdx)
+                    PerturbedAbs = PerturbedFit(1) * Wavelength(PerturbedIdx(i)) + PerturbedFit(2);
+                    NonPerturbedAbs = NonPerturbedFit(1) * Wavelength(PerturbedIdx(i)) + NonPerturbedFit(2);
+                    Offset = NonPerturbedAbs - PerturbedAbs;
+                    Absorption(PerturbedIdx(i)) = Absorption(PerturbedIdx(i)) + Offset;
                 end
+%                 % Check correction
+%                 plot(Wavelength, obj.Data.Absorption)
+%                 hold on
+%                 plot(PerturbedX, PerturbedFit(1) * PerturbedX + PerturbedFit(2))
+%                 plot(NonPerturbedX, NonPerturbedFit(1) * PerturbedX + NonPerturbedFit(2))
+%                 plot(Wavelength, Absorption)
+%                 hold off
             end
+            % Store corrected absorption
             obj.Data.CorrectedAbsorption = Absorption;
         end
         function estimateSpectralRange(obj)
@@ -254,7 +259,9 @@ classdef readAbs < handle
             else
                 errorbar(obj.Data.Wavelength, obj.Data.Absorption, obj.Data.SD, 'LineWidth', 2);
             end
-            title(sprintf('%s{Raw Absorption of %s in %s}', '\textbf', obj.Compound, obj.Solvent), 'Interpreter', 'latex');
+            Compound = strrep(obj.Compound, '%', '\%');
+            Solvent = strrep(obj.Solvent, '%', '\%');
+            title(sprintf('%s{Raw Absorption of %s in %s}', '\textbf', Compound, Solvent), 'Interpreter', 'latex');
             xlabel('Wavelength (nm)', 'Interpreter', 'latex');
             ylabel('Absorption (a.u.)', 'Interpreter', 'latex');
             YMax = max(obj.Data.Absorption(obj.Data.Wavelength > obj.PeakExpectedAbove));
@@ -270,7 +277,9 @@ classdef readAbs < handle
             else
                 errorbar(obj.Data.Wavelength, obj.Data.CorrectedAbsorption, obj.Data.SD, 'LineWidth', 2);
             end
-            title(sprintf('%s{Corrected Absorption of %s in %s}', '\textbf', obj.Compound, obj.Solvent), 'Interpreter', 'latex');
+            Compound = strrep(obj.Compound, '%', '\%');
+            Solvent = strrep(obj.Solvent, '%', '\%');
+            title(sprintf('%s{Corrected Absorption of %s in %s}', '\textbf', Compound, Solvent), 'Interpreter', 'latex');
             xlabel('Wavelength (nm)', 'Interpreter', 'latex');
             ylabel('Absorption (a.u.)', 'Interpreter', 'latex');
             YMax = max(obj.Data.CorrectedAbsorption(obj.Data.Wavelength > obj.PeakExpectedAbove));
@@ -286,7 +295,9 @@ classdef readAbs < handle
             else
                 errorbar(obj.Data.Wavelength, obj.Data.NormalizedCorrectedAbsorption, obj.Data.SD, 'LineWidth', 2);
             end
-            title(sprintf('%s{Normalized Corrected Absorption of %s in %s}', '\textbf', obj.Compound, obj.Solvent), 'Interpreter', 'latex');
+            Compound = strrep(obj.Compound, '%', '\%');
+            Solvent = strrep(obj.Solvent, '%', '\%');
+            title(sprintf('%s{Normalized Corrected Absorption of %s in %s}', '\textbf', Compound, Solvent), 'Interpreter', 'latex');
             xlabel('Wavelength (nm)', 'Interpreter', 'latex');
             ylabel('Absorption (a.u.)', 'Interpreter', 'latex');
             ylim([0, 1]);
