@@ -1,4 +1,4 @@
-function S = calculateExponentialDecayStretch(X, Y, Fit)
+function Fit = calculateExponentialDecayStretch(X, Y, Fit)
     X = double(X);
     Y = double(Y);
     % Determine order of fit
@@ -33,15 +33,15 @@ function S = calculateExponentialDecayStretch(X, Y, Fit)
     % Do fit
     StretchFit = fit(X, Y, FitType, 'Lower', LowerLimit, 'Upper', UpperLimit, 'StartPoint', StartGuess, 'problem', Problem);
     % Prepare variables to return
-    S.H1 = StretchFit.H1;
+    Fit.H1 = StretchFit.H1;
     if Order > 1
-        S.H2 = StretchFit.H2;
+        Fit.H2 = StretchFit.H2;
     else
-        S.H2 = NaN;
+        Fit.H2 = NaN;
     end
     if Order > 2
-        S.H3 = StretchFit.H3;
+        Fit.H3 = StretchFit.H3;
     else
-        S.H3 = NaN;
+        Fit.H3 = NaN;
     end
 end

@@ -29,10 +29,17 @@ classdef readSdt < handle
                 Binning = input('Please Specify Binning:\n');
             end
             obj.Binning = Binning;
-            % Read sample information from file name
+            obj.readSampleInformationFromFileName()
+            obj.importData()
+            obj.calculateLifetime()
+            %obj.saveResults()
+        end
+        function readSampleInformationFromFileName(obj)
             [~, FileName, ~] = fileparts(obj.AbsoluteFileName);
             obj.Title = FileName;
             [obj.Date, obj.Replicate, obj.Type, obj.Solvent, obj.Concentration, obj.Compound] = readInformationFromFileName(obj.Title);
+        end
+        function importData(obj)
             % Import data
             Data = bfopen(obj.AbsoluteFileName);
             % All data but detector 2, channel 1 is junk
@@ -53,21 +60,24 @@ classdef readSdt < handle
             Image = Data{KeepDetector}(KeepChannelIdx, 1);
             % Store relevant data
             obj.Data = table(TimeBin, Image);
+        end
+        function calculateLifetime(obj)
+            % Create intensity image
+            obj.Results.IntensityImage = cat(3, obj.Data.Image{:});
             % Calculate timesteps
             TimeStep = str2double(obj.Info.SP_TAC_TC);
             obj.Data.Time = obj.Data.TimeBin * TimeStep * 10^9; % Converting seconds to nanoseconds
-            % Do initial fit of fully binned image to estimate parameters
-            Time = obj.Data.Time;
+            % Fully bin images and locate timesteps that contain decay
             Photons = cellfun(@(x) sum(x, 'all'), obj.Data.Image);
             DecayIdx = determineDecayIndex(Photons);
-            Time = Time(DecayIdx);
+            % Drop data at timesteps that do not contain decay
+            Time = obj.Data.Time(DecayIdx);
             Photons = Photons(DecayIdx);
+            % Do binned fit
             NumberOfDecays = determineNumberOfExponentialDecays(Time, Photons);
-            InitialFit = calculateExponentialDecay(Time, Photons, NumberOfDecays);
-            InitialStretchFit = calculateExponentialDecayStretch(Time, Photons, InitialFit);
+            InitialGuess = NaN;
+            InitialFit = calculateExponentialDecay(Time, Photons, NumberOfDecays, InitialGuess);
             if isa(obj.Binning, 'char') && strcmp(obj.Binning, 'Full')
-                obj.Results.Compound = {obj.Compound};
-                obj.Results.Solvent = {obj.Solvent};
                 obj.Results.Background = InitialFit.B;
                 obj.Results.Amplitude1 = InitialFit.A1;
                 obj.Results.Lifetime1 = InitialFit.T1;
@@ -97,16 +107,22 @@ classdef readSdt < handle
                 BinnedImage = cellfun(@(x) binImage(x, obj.Binning), obj.Data.Image, 'UniformOutput', false);
                 for Y = 1:PixelY
                     for X = 1:PixelX
+                        % Get fitting variables and determine decay
+                        % timesteps
                         Time = obj.Data.Time;
                         Photons = cellfun(@(x) x(Y, X), BinnedImage);
                         DecayIdx = determineDecayIndex(Photons);
                         % If decay is observed, do fit
                         if any(DecayIdx)
+                            % Drop data at timesteps that do not contain
+                            % decay
                             Time = Time(DecayIdx);
                             Photons = Photons(DecayIdx);
+                            % Do fit
                             NumberOfDecays = determineNumberOfExponentialDecays(Time, Photons);
-                            Fit = calculateExponentialDecay(Time, Photons, NumberOfDecays);
+                            Fit = calculateExponentialDecay(Time, Photons, NumberOfDecays, InitialFit);
                             StretchFit = calculateExponentialDecayStretch(Time, Photons, Fit);
+                            % Store results
                             obj.Results.Background(Y, X) = Fit.B;
                             obj.Results.Amplitude1(Y, X) = Fit.A1;
                             obj.Results.Lifetime1(Y, X) = Fit.T1;
@@ -122,135 +138,13 @@ classdef readSdt < handle
                 end
             end
         end
-        function calculateLocalLifetime(obj)
-            Detector = 2;
-            % Calculate time profile
-            RawData = obj.Data{2}; % choosing image from detector 2
-            RawData = RawData(1:end/2, 1); % choosing first channel
-            RawData = cat(3, RawData{:});
-            % Creating time points
-            TimeBase = obj.Info{Detector}.timebase; % nanoseconds
-            TimeStep = TimeBase / length(RawData);
-            TimePoints = (TimeStep : TimeStep : TimeBase).';
-            % Convolute image to apply binning
-            Filter = ones(2 * obj.Results.Binning + 1, 2 * obj.Results.Binning + 1, 'uint16');
-            BinnedData = uint16(convn(RawData, Filter, 'same'));
-            % Crop image
-            CropImage = sum(RawData, 3, 'native');
-            Scaling = 65535 / max(max(CropImage));
-            CropImage = CropImage * Scaling;
-            [~, CropPos] = imcrop(CropImage);
-            CropPos = uint16(round(CropPos));
-            CropPos = [CropPos(1), CropPos(2), CropPos(1) + CropPos(3) - 1, CropPos(2) + CropPos(4) - 1];
-            Data = BinnedData(CropPos(1):CropPos(3), CropPos(2):CropPos(4), :);
-            % Show cropped image
-            Image.Sum = sum(Data, 3, 'native');
-            Image.Mean = mean2(Image.Sum);
-            Image.SD = std2(Image.Sum);
-            imshow(Image.Sum, [Image.Mean - Image.SD, Image.Mean + Image.SD]);
-            % imshow(Data(:,:,70), [mean2(Data(:,:,70)) - std2(Data(:,:,70)), mean2(Data(:,:,70)) + std2(Data(:,:,70))])
-            % plot(squeeze(sum(sum(Data, 1), 2)))
+        function saveResults(obj)
             
-            % Locate time planes with zero intensity
-            TimeProfile = squeeze(sum(sum(Data, 1), 2));
-            ZeroIntensity = TimeProfile == 0;
-            % Locate point of excitation
-            [~, MaxIndex] = max(TimeProfile);
-            % Determine preexcitation background intensity
-            PreExcitation = and((1:length(TimeProfile)).' < MaxIndex, ~ZeroIntensity);
-            BackgroundIntensity = min(Data(:, :, PreExcitation), [], 3);
-            obj.Results.BackgroundIntensity{Detector} = BackgroundIntensity;
-            % Locate suitable time planes for fitting
-            TimePlanesWithDecay = and((1:length(TimeProfile)).' >= MaxIndex, ~ZeroIntensity);
-            TimePoints = TimePoints(TimePlanesWithDecay);
-            Data = Data(:, :, TimePlanesWithDecay);
-            TimeProfile = squeeze(sum(sum(Data, 1), 2));
-            % Show cropped binned image timeprofile
-            plot(TimePoints, TimeProfile);
-            % Transform data for linear fitting
-            [Y, X, Z] = size(Data);
-            Data = log(double(minus(Data, repmat(BackgroundIntensity, 1, 1, Z))));
-            Data(Data == -Inf) = 0;
-            obj.Results.DataPoints{Detector} = {TimePoints, Data};
-            % Define fitting model
-            FitType = fittype('A - t / T', 'dependent', {'I'}, 'independent', {'t'}, 'coefficients', {'A', 'T'});
-            Limit.Init = [1, 1];
-            Limit.Low = [0, 0.2];
-            Limit.High = [Inf, TimeBase];
-            FitOptions = fitoptions('Method', 'NonlinearLeastSquares', 'Lower', Limit.Low, 'Upper', Limit.High, 'StartPoint', Limit.Init);
-            % Prepare progressbar
-            Iteration = 0;
-            Step = 0;
-            TotalSteps = Y * X;
-            StepSize = 1 / TotalSteps;
-            f = waitbar(Step, sprintf('Fitting Data: %d / %d', Iteration, TotalSteps));
-            % Do fit
-            Fit = cell(Y, X);
-            for y = 1:Y
-                for x = 1:X
-                    plot(TimePoints, squeeze(Data(y, x, :)), 'b', 'LineWidth', 2);
-                    Fit{y, x} = fit(TimePoints, squeeze(Data(y, x, :)), FitType, FitOptions);
-                    hold on
-                    FittedData = Fit{y, x}.A - TimePoints / Fit{y, x}.T;
-                    plot(TimePoints, FittedData, 'r');
-                    hold off
-                    Iteration = Iteration + 1;
-                    Step = Step + StepSize;
-                    waitbar(Step, f, sprintf('Fitting Data: %d / %d', Iteration, TotalSteps));
-                end
-            end
-            close(f)
-            close()
-            obj.Results.Fit{Detector} = Fit;
-            obj.Results.Amplitude{Detector} = cellfun(@(x) x.A, Fit);
-            obj.Results.Lifetime{Detector} = cellfun(@(x) x.T, Fit);
+            
+            1 == 1;
         end
         function calculateOverallLifetimeFull(obj)
-            Detector = 2;
-            % Calculate time profile
-            RawData = obj.Data{2}; % choosing image from detector 2
-            RawData = RawData(1:end/2, 1); % choosing first channel
-            RawData = cat(3, RawData{:});
-            % Creating time points
-            TimeBase = obj.Info{Detector}.timebase; % nanoseconds
-            TimeStep = TimeBase / length(RawData);
-            TimePoints = (TimeStep : TimeStep : TimeBase).';
-            % Convolute image to apply binning
-            Filter = ones(2 * obj.Results.Binning + 1, 2 * obj.Results.Binning + 1, 'uint16');
-            %Filter = double(Filter) / sum(sum(Filter));
-            Data = uint16(convn(RawData, Filter, 'same'));
-            % Locate time planes with zero intensity
-            TimeProfile = squeeze(sum(sum(Data, 1), 2));
-            ZeroIntensity = TimeProfile == 0;
-            % Locate point of excitation
-            [~, MaxIndex] = max(TimeProfile);
-            % Determine preexcitation background intensity
-            PreExcitation = and((1:length(TimeProfile)).' < MaxIndex, ~ZeroIntensity);
-            BackgroundIntensity = min(Data(:, :, PreExcitation), [], 3);
-            obj.Results.BackgroundIntensity{Detector} = BackgroundIntensity;
-            % Locate suitable time planes for fitting
-            TimePlanesWithDecay = and((1:length(TimeProfile)).' >= MaxIndex, ~ZeroIntensity);
-            TimePoints = TimePoints(TimePlanesWithDecay);
-            Data = Data(:, :, TimePlanesWithDecay);
-            TimeProfile = TimeProfile(TimePlanesWithDecay);
-            % Show cropped timeprofile
-            plot(TimePoints, TimeProfile);
-            % Locate background in image
-            SumImage = sum(Data, 3);
-            Threshold = max(max(SumImage)) * 0.1;
-            BackgroundIndex = zeros(size(Data, 1), size(Data, 2));
-            BackgroundIndex(SumImage < Threshold) = 1;
-            % Transform data for linear fitting
-            [Y, X, Z] = size(Data);
-            Data = log(double(minus(Data, repmat(BackgroundIntensity, 1, 1, Z))));
-            Data(Data == -Inf) = 0;
-            obj.Results.DataPoints{Detector} = {TimePoints, Data};
-            % Define fitting model
-            FitType = fittype('A - t / T', 'dependent', {'I'}, 'independent', {'t'}, 'coefficients', {'A', 'T'});
-            Init = [1, 1];
-            Low = [0, 0.2];
-            High = [Inf, TimeBase];
-            FitOptions = fitoptions('Method', 'NonlinearLeastSquares', 'Lower', Low, 'Upper', High, 'StartPoint', Init);
+            
             % Prepare progressbar
             Iteration = 0;
             Step = 0;
@@ -282,64 +176,22 @@ classdef readSdt < handle
             obj.Results.Amplitude{Detector} = cellfun(@(x) x.A, Fit);
             obj.Results.Lifetime{Detector} = cellfun(@(x) x.T, Fit);
         end
-        function calculateOverallLifetimeFast(obj)
-            Detector = 2;
-            % Calculate time profile
-            TempData = obj.Data{2}; % choosing image from detector 2
-            TempData = TempData(1:end/2, 1); % choosing first channel
-            TempData = cat(3, TempData{:});
-            TimeProfile = squeeze(sum(sum(TempData, 1), 2));
-            % Creating time points
-            TimeBase = obj.Info{Detector}.timebase; % nanoseconds
-            TimeStep = TimeBase / length(TempData);
-            TimePoints = (TimeStep : TimeStep : TimeBase).';
-            % Locate time planes with zero intensity
-            ZeroIntensity = TimeProfile == 0;
-            % Locate point of excitation
-            [~, MaxIndex] = max(TimeProfile);
-            % Determine preexcitation background intensity
-            PreExcitation = and((1:length(TimeProfile)).' < MaxIndex, ~ZeroIntensity);
-            BackgroundIntensity = min(TimeProfile(PreExcitation));
-            % Locate suitable data for fitting
-            SuitableData = and((1:length(TimeProfile)).' >= MaxIndex, ~ZeroIntensity);
-            % Transform data for linear fitting
-            TimePoints = TimePoints(SuitableData);
-            TimeProfile = log(TimeProfile(SuitableData) - BackgroundIntensity);
-            obj.Results.DataPoints{Detector} = table(TimePoints, TimeProfile);
-            obj.Results.BackgroundIntensity{Detector} = BackgroundIntensity;
-            % Define fitting model
-            FitType = fittype('A - t / T', 'dependent', {'I'}, 'independent', {'t'}, 'coefficients', {'A', 'T'});
-            Limit.Low = [0, 0.2];
-            Limit.High = [Inf, TimeBase];
-            FitOptions = fitoptions('Method', 'LinearLeastSquares', 'Lower', Limit.Low, 'Upper', Limit.High);
-            % Do fit
-            obj.Results.Fit{Detector} = fit(TimePoints, TimeProfile, FitType, FitOptions);
-%             % Define fitting model
-%             FitType = fittype('B + A * exp( -t / T )', 'dependent', {'I'}, 'independent', {'t'}, 'coefficients', {'B', 'A', 'T'});
-%             Limit.Init = [BackgroundIntensity, 1, 1];
-%             Limit.Low = [BackgroundIntensity, 0, 0.2];
-%             Limit.High = [BackgroundIntensity, Inf, TimeBase];
-%             FitOptions = fitoptions('Method', 'NonlinearLeastSquares', 'Lower', Limit.Low, 'Upper', Limit.High, 'StartPoint', Limit.Init);
-%             % Do fit
-%             Smoothing = 50;
-%             obj.Fit = fit(TimePoints(SuitableData), smooth(TimeProfile(SuitableData), Smoothing), FitType, FitOptions);
-        end
-        function saveResults(obj)
-            Detector = 2;
-            FileName = strsplit(obj.AbsoluteFilePath, '.sdt');
-            FileName = {FileName{1}, '.csv'};
-            Background = obj.Results.BackgroundIntensity{Detector};
-            csvwrite(strjoin(FileName, '-background'), Background);
-            Amplitude = cellfun(@(x) round(x.A, 3), obj.Results.Fit{Detector});
-            csvwrite(strjoin(FileName, '-amplitude'), Amplitude);
-            Lifetime = cellfun(@(x) round(x.T, 3), obj.Results.Fit{Detector});
-            csvwrite(strjoin(FileName, '-lifetime'), Lifetime);
-            Data = obj.Data{2}; % choosing image from detector 2
-            Data = Data(1:end/2, 1); % choosing first channel
-            ImageTimePlanes = cat(3, Data{:});
-            SumImage = sum(ImageTimePlanes, 3, 'native');
-            csvwrite(strjoin(FileName, '-sumimage'), SumImage);
-        end
+%         function saveResults(obj)
+%             Detector = 2;
+%             FileName = strsplit(obj.AbsoluteFilePath, '.sdt');
+%             FileName = {FileName{1}, '.csv'};
+%             Background = obj.Results.BackgroundIntensity{Detector};
+%             csvwrite(strjoin(FileName, '-background'), Background);
+%             Amplitude = cellfun(@(x) round(x.A, 3), obj.Results.Fit{Detector});
+%             csvwrite(strjoin(FileName, '-amplitude'), Amplitude);
+%             Lifetime = cellfun(@(x) round(x.T, 3), obj.Results.Fit{Detector});
+%             csvwrite(strjoin(FileName, '-lifetime'), Lifetime);
+%             Data = obj.Data{2}; % choosing image from detector 2
+%             Data = Data(1:end/2, 1); % choosing first channel
+%             ImageTimePlanes = cat(3, Data{:});
+%             SumImage = sum(ImageTimePlanes, 3, 'native');
+%             csvwrite(strjoin(FileName, '-sumimage'), SumImage);
+%         end
         function fig = showColorCodedLifetimeImage(obj)
             Detector = 2;
             % Prepare figure

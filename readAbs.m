@@ -20,8 +20,12 @@ classdef readAbs < handle
         Data
     end
     methods
-        function obj = readAbs(AbsoluteFileName)
-            obj.PeakExpectedAbove = 350;
+        function obj = readAbs(AbsoluteFileName, PeakExpectedAbove)
+            % Ask for peak expect, if none is provided
+            if ~exist('PeakExpectedAbove', 'var')
+                PeakExpectedAbove = input('Please Specify Above Which Wavelength Peak Is Expected: ');
+            end            
+            obj.PeakExpectedAbove = PeakExpectedAbove;
             obj.SpectralRangeRelativeLimit = 0.05;
             obj.MaxAbsorptionTarget = 0.1;
             % Ask for file, if none is provided
@@ -161,8 +165,8 @@ classdef readAbs < handle
 %                 hold off
             end
             % Correct lamp change around 380 nm
-            AffectedWavelength.Max = 380;
-            AffectedWavelength.Min = str2double(obj.Info{1}.InstrumentParameters.LampChange(1:end-3));
+            AffectedWavelength.Max = 380 + 1;
+            AffectedWavelength.Min = str2double(obj.Info{1}.InstrumentParameters.LampChange(1:end-3)) - 1;
             AffectedIdx = AffectedWavelength.Min < Wavelength & Wavelength <= AffectedWavelength.Max;
             if any(AffectedIdx)
                 % Choose correction method based on wavelength
@@ -178,26 +182,59 @@ classdef readAbs < handle
                     PerturbedIdx = find(AffectedIdx);
                     NonPerturbedIdx = [min(PerturbedIdx) - 1, max(PerturbedIdx) + 1];
                 end
-                % Do linear interpolation to add offset
-                PerturbedX = Wavelength([min(PerturbedIdx), max(PerturbedIdx)]);
-                PerturbedY = Absorption([min(PerturbedIdx), max(PerturbedIdx)]);
-                PerturbedFit = polyfit(PerturbedX, PerturbedY, 1);
-                NonPerturbedX = Wavelength(NonPerturbedIdx);
-                NonPerturbedY = Absorption(NonPerturbedIdx);
-                NonPerturbedFit = polyfit(NonPerturbedX, NonPerturbedY, 1);
-                for i = 1:length(PerturbedIdx)
-                    PerturbedAbs = PerturbedFit(1) * Wavelength(PerturbedIdx(i)) + PerturbedFit(2);
-                    NonPerturbedAbs = NonPerturbedFit(1) * Wavelength(PerturbedIdx(i)) + NonPerturbedFit(2);
-                    Offset = NonPerturbedAbs - PerturbedAbs;
-                    Absorption(PerturbedIdx(i)) = Absorption(PerturbedIdx(i)) + Offset;
+                if IsInBeginning || IsInEnd
+                    % Do linear interpolation to add offset
+                    PerturbedX = Wavelength([min(PerturbedIdx), max(PerturbedIdx)]);
+                    PerturbedY = Absorption([min(PerturbedIdx), max(PerturbedIdx)]);
+                    PerturbedFit = polyfit(PerturbedX, PerturbedY, 1);
+                    NonPerturbedX = Wavelength(NonPerturbedIdx);
+                    NonPerturbedY = Absorption(NonPerturbedIdx);
+                    NonPerturbedFit = polyfit(NonPerturbedX, NonPerturbedY, 1);
+                    for i = 1:length(PerturbedIdx)
+                        PerturbedAbs = PerturbedFit(1) * Wavelength(PerturbedIdx(i)) + PerturbedFit(2);
+                        NonPerturbedAbs = NonPerturbedFit(1) * Wavelength(PerturbedIdx(i)) + NonPerturbedFit(2);
+                        Offset = NonPerturbedAbs - PerturbedAbs;
+                        Absorption(PerturbedIdx(i)) = Absorption(PerturbedIdx(i)) + Offset;
+                    end
+%                     % Check correction
+%                     plot(Wavelength, obj.Data.Absorption)
+%                     hold on
+%                     plot(PerturbedX, PerturbedFit(1) * PerturbedX + PerturbedFit(2))
+%                     plot(NonPerturbedX, NonPerturbedFit(1) * PerturbedX + NonPerturbedFit(2))
+%                     plot(Wavelength, Absorption)
+%                     hold off
+                else
+                    % In small increments, everything is a straight line:
+                    % Get linear fit for edge above perturbed region
+                    AboveArtifactIdx = max(NonPerturbedIdx) : length(Absorption);
+                    AboveArtifactWavelength = Wavelength(AboveArtifactIdx);
+                    AboveArtifactAbsorption = Absorption(AboveArtifactIdx);
+                    SmoothAboveArtifactAbsorption = smooth(AboveArtifactAbsorption);
+                    AboveArtifactFit = polyfit(AboveArtifactWavelength(1:3), SmoothAboveArtifactAbsorption(1:3), 1);
+                    % Get linear fit for edge below perturbed region
+                    BelowArtifactIdx = 1 : min(NonPerturbedIdx);
+                    BelowArtifactWavelength = Wavelength(BelowArtifactIdx);
+                    BelowArtifactAbsorption = Absorption(BelowArtifactIdx);
+                    SmoothBelowArtifactAbsorption = smooth(BelowArtifactAbsorption);
+                    BelowArtifactFit = polyfit(BelowArtifactWavelength(end-3:end), SmoothBelowArtifactAbsorption(end-3:end), 1);
+                    %scatter(BelowArtifactWavelength, BelowArtifactAbsorption, 'b')
+                    %hold on
+                    %scatter(AboveArtifactWavelength, AboveArtifactAbsorption, 'b')
+                    %ylim([0 0.1]);
+                    % Combine fits to correct
+                    for i = 1:length(PerturbedIdx)
+                        PerturbedWavelength = Wavelength(PerturbedIdx(i));
+                        AboveArtifactFitContribution = AboveArtifactFit(1) * PerturbedWavelength + AboveArtifactFit(2);
+                        BelowArtifactFitContribution = BelowArtifactFit(1) * PerturbedWavelength + BelowArtifactFit(2);
+                        % Using logistic function to calculate fraction of
+                        % contribution for each fit
+                        Fraction = 1 / ( 1 + exp(- (i - (length(PerturbedIdx) / 2))));
+                        % Moving from below-fit towards above-fit
+                        CombinedContribution = Fraction * AboveArtifactFitContribution + ( 1 - Fraction ) * BelowArtifactFitContribution;
+                        Absorption(PerturbedIdx(i)) = CombinedContribution;
+                        %scatter(PerturbedWavelength, TotalContribution, 'g')
+                    end
                 end
-%                 % Check correction
-%                 plot(Wavelength, obj.Data.Absorption)
-%                 hold on
-%                 plot(PerturbedX, PerturbedFit(1) * PerturbedX + PerturbedFit(2))
-%                 plot(NonPerturbedX, NonPerturbedFit(1) * PerturbedX + NonPerturbedFit(2))
-%                 plot(Wavelength, Absorption)
-%                 hold off
             end
             % Store corrected absorption
             obj.Data.CorrectedAbsorption = Absorption;
@@ -215,11 +252,16 @@ classdef readAbs < handle
                     [MaxAbs, MaxIdx] = max(Absorption(Idx));
                     NormalizedAbsorption = Absorption / MaxAbs;
                     obj.Data.NormalizedCorrectedAbsorption = NormalizedAbsorption;
+                    % If max abs appears for more wavelengths, find middle
+                    if length(Absorption == MaxAbs) > 1
+                        MaxIdx = round(mean(find(Absorption(Idx) == MaxAbs)));
+                        MaxWavelength = Wavelength(Idx);
+                        MaxWavelength = MaxWavelength(MaxIdx);
+                        MaxIdx = find(Wavelength == MaxWavelength);
+                    end
                     % Determine spectral range
-                    if MaxAbs > 10 * 0.003 % smallest abs step = 0.003
-                        Peak = Wavelength(Idx);
-                        Peak = Peak(MaxIdx);
-                        MaxIdx = find(Wavelength == Peak);
+                    if MaxAbs > 10 * 0.0003 % smallest abs step = 0.0003
+                        Peak = Wavelength(MaxIdx);
                         Idx = MaxIdx;
                         while Idx > 0
                             if NormalizedAbsorption(Idx) <= obj.SpectralRangeRelativeLimit

@@ -177,15 +177,7 @@ classdef readMsr < handle
             FileName = FileName{1};
             writematrix(obj.IntensityImage, strcat(FileName, '-intensity.csv'))
             writematrix(obj.Results.Background, strcat(FileName, '-background.csv'))
-            writematrix(obj.Results.Amplitude1, strcat(FileName, '-amplitude1.csv'))
-            writematrix(obj.Results.Lifetime1, strcat(FileName, '-lifetime1.csv'))
-            writematrix(obj.Results.Stretch1, strcat(FileName, '-stretch1.csv'))
-            writematrix(obj.Results.Amplitude2, strcat(FileName, '-amplitude2.csv'))
-            writematrix(obj.Results.Lifetime2, strcat(FileName, '-lifetime2.csv'))
-            writematrix(obj.Results.Stretch2, strcat(FileName, '-stretch2.csv'))
-            writematrix(obj.Results.Amplitude3, strcat(FileName, '-amplitude3.csv'))
-            writematrix(obj.Results.Lifetime3, strcat(FileName, '-lifetime3.csv'))
-            writematrix(obj.Results.Stretch3, strcat(FileName, '-stretch3.csv'))
+            
         end
     end
 end
