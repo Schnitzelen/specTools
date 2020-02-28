@@ -121,7 +121,7 @@ classdef readMsr < handle
                     X = CoordinateX(i);
                     Photons = squeeze(BinnedImage(Y, X, :));
                     DecayIdx = determineDecayIndex(Photons);
-                    if Y < 4 && any(DecayIdx)
+                    if any(DecayIdx)
                         Fit = calculateExponentialDecay(Time(DecayIdx), Photons(DecayIdx), NOD, InitialFit);
                         Fit = calculateExponentialDecayStretch(Time(DecayIdx), Photons(DecayIdx), Fit);
                         Results{i} = Fit;
