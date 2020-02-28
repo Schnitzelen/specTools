@@ -127,33 +127,38 @@ classdef readMsr < handle
             elseif isa(obj.Binning, 'double')
                 % Prepare variables for fitting with parallel loop
                 [PixelY, PixelX] = size(obj.Data.Image{1});
-                CoordinateX = repmat([1:PixelX]', PixelY, 1);
-                CoordinateY = arrayfun(@(x) repmat(x, PixelX, 1), [1:PixelY]', 'UniformOutput', false);
-                CoordinateY = vertcat(CoordinateY{:});
+                %CoordinateX = repmat([1:PixelX]', PixelY, 1);
+                %CoordinateY = arrayfun(@(x) repmat(x, PixelX, 1), [1:PixelY]', 'UniformOutput', false);
+                %CoordinateY = vertcat(CoordinateY{:});
                 BinnedImage = cellfun(@(x) binImage(x, obj.Binning), obj.Data.Image, 'UniformOutput', false);
                 BinnedImage = cat(3, BinnedImage{:});
                 Photons = squeeze(sum(BinnedImage, [1, 2]));
                 DecayIdx = determineDecayIndex(Photons);
                 Time = obj.Data.Time;
-                Results = cell(PixelY * PixelX, 1);
+                Results = cell(PixelY, PixelX);
                 if isnan(obj.NumberOfDecays)
                     NOD = determineNumberOfExponentialDecays(Time(DecayIdx), Photons(DecayIdx));
                 else
                     NOD = obj.NumberOfDecays;
                 end
                 % Do fitting on each pixel
-                parfor i = 1:length(Results)
-                    Y = CoordinateY(i);
-                    X = CoordinateX(i);
-                    Photons = squeeze(BinnedImage(Y, X, :));
-                    DecayIdx = determineDecayIndex(Photons);
-                    if sum(DecayIdx) > 3
-                        Fit = calculateExponentialDecay(Time(DecayIdx), Photons(DecayIdx), NOD, InitialFit);
-                        Fit = calculateExponentialDecayStretch(Time(DecayIdx), Photons(DecayIdx), Fit);
-                        Results{i} = Fit;
-                    else
-                        Results{i} = NaN;
+                parfor Y = 1:PixelY
+                    RawLine = BinnedImage(Y, :, :);
+                    FitLine = cell(1, PixelX);
+                    for X = 1:PixelX
+                        %Y = CoordinateY(j);
+                        %X = CoordinateX(j);
+                        Photons = squeeze(RawLine(1, X, :));
+                        DecayIdx = determineDecayIndex(Photons);
+                        if sum(DecayIdx) > 3
+                            Fit = calculateExponentialDecay(Time(DecayIdx), Photons(DecayIdx), NOD, InitialFit);
+                            Fit = calculateExponentialDecayStretch(Time(DecayIdx), Photons(DecayIdx), Fit);
+                            FitLine{X} = Fit;
+                        else
+                            FitLine{X} = NaN;
+                        end
                     end
+                    Results(Y, :) = FitLine;
                 end
                 % Reshape results
                 Results = reshape(Results, PixelY, PixelX)'; % filled out column-wise -> transmute output
