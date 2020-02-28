@@ -89,23 +89,25 @@ classdef readMsr < handle
         function calculateLifetime(obj)
             % Setup variables
             if isa(obj.Binning, 'char') && strcmp(obj.Binning, 'Full')
-                Results{1} = NaN;
+                Results{1, 1} = NaN;
             elseif isa(obj.Binning, 'double')
-                Background = NaN(size(Results));
-                Amplitude1 = NaN(size(Results));
-                Lifetime1 = NaN(size(Results));
-                Stretch1 = NaN(size(Results));
-                Amplitude2 = NaN(size(Results));
-                Lifetime2 = NaN(size(Results));
-                Stretch2 = NaN(size(Results));
-                Amplitude3 = NaN(size(Results));
-                Lifetime3 = NaN(size(Results));
-                Stretch3 = NaN(size(Results));
+                Size = size(obj.Data.Image{1});
+                Background = NaN(Size);
+                Amplitude1 = NaN(Size);
+                Lifetime1 = NaN(Size);
+                Stretch1 = NaN(Size);
+                Amplitude2 = NaN(Size);
+                Lifetime2 = NaN(Size);
+                Stretch2 = NaN(Size);
+                Amplitude3 = NaN(Size);
+                Lifetime3 = NaN(Size);
+                Stretch3 = NaN(Size);
             end
             % Setup for initial fit
             DecayIdx = determineDecayIndex(obj.Data.Photons);
             if sum(DecayIdx) < 3
                 warning('No Decay Detected in Image %s', obj.Title);
+                obj.Results = NaN;
                 return
             end
             T = obj.Data.Time(DecayIdx);
@@ -119,10 +121,9 @@ classdef readMsr < handle
             InitialGuess = NaN;
             InitialFit = calculateExponentialDecay(T, P, NOD, InitialGuess);
             if isa(obj.Binning, 'char') && strcmp(obj.Binning, 'Full')
-                % If binning is set to full - results are almost already
-                % calculated
+                % If full binning, results are already calculated
                 Fit = calculateExponentialDecayStretch(T, P, InitialFit);
-                Results{1} = Fit;
+                Results{1, 1} = Fit;
             elseif isa(obj.Binning, 'double')
                 % Prepare variables for fitting with parallel loop
                 [PixelY, PixelX] = size(obj.Data.Image{1});
