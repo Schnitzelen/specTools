@@ -3,6 +3,7 @@
 classdef readMsr < handle
     % Class used for reading and containing FLIM-data
     properties
+        DependentPackages
         AbsoluteFileName
         Title
         Date
@@ -42,11 +43,16 @@ classdef readMsr < handle
                 ForceFitOnAllPixels = false;
             end
             obj.ForceFitOnAllPixels = ForceFitOnAllPixels;
+            obj.importDependentPackages()
             obj.readSampleInformationFromFileName()
             obj.importData()
             obj.calculateLifetime()
             %obj.calculateOverallLifetimeFull()
             %obj.saveResults()
+        end
+        function importDependentPackages(obj)
+            obj.DependentPackages = {'bfmatlab'};
+            importPackages(obj.DependentPackages);
         end
         function readSampleInformationFromFileName(obj)
             [~, FileName, ~] = fileparts(obj.AbsoluteFileName);
@@ -81,8 +87,27 @@ classdef readMsr < handle
             obj.Data = table(TimeBin, Image, Time, Photons);
         end
         function calculateLifetime(obj)
+            % Setup variables
+            if isa(obj.Binning, 'char') && strcmp(obj.Binning, 'Full')
+                Results{1} = NaN;
+            elseif isa(obj.Binning, 'double')
+                Background = NaN(size(Results));
+                Amplitude1 = NaN(size(Results));
+                Lifetime1 = NaN(size(Results));
+                Stretch1 = NaN(size(Results));
+                Amplitude2 = NaN(size(Results));
+                Lifetime2 = NaN(size(Results));
+                Stretch2 = NaN(size(Results));
+                Amplitude3 = NaN(size(Results));
+                Lifetime3 = NaN(size(Results));
+                Stretch3 = NaN(size(Results));
+            end
             % Setup for initial fit
             DecayIdx = determineDecayIndex(obj.Data.Photons);
+            if sum(DecayIdx) < 3
+                warning('No Decay Detected in Image %s', obj.Title);
+                return
+            end
             T = obj.Data.Time(DecayIdx);
             P = obj.Data.Photons(DecayIdx);
             if isnan(obj.NumberOfDecays)
@@ -121,7 +146,7 @@ classdef readMsr < handle
                     X = CoordinateX(i);
                     Photons = squeeze(BinnedImage(Y, X, :));
                     DecayIdx = determineDecayIndex(Photons);
-                    if any(DecayIdx)
+                    if sum(DecayIdx) > 3
                         Fit = calculateExponentialDecay(Time(DecayIdx), Photons(DecayIdx), NOD, InitialFit);
                         Fit = calculateExponentialDecayStretch(Time(DecayIdx), Photons(DecayIdx), Fit);
                         Results{i} = Fit;
@@ -132,17 +157,7 @@ classdef readMsr < handle
                 % Reshape results
                 Results = reshape(Results, PixelY, PixelX)'; % filled out column-wise -> transmute output
             end
-            % Prepare variables to receive results
-            Background = NaN(size(Results));
-            Amplitude1 = NaN(size(Results));
-            Lifetime1 = NaN(size(Results));
-            Stretch1 = NaN(size(Results));
-            Amplitude2 = NaN(size(Results));
-            Lifetime2 = NaN(size(Results));
-            Stretch2 = NaN(size(Results));
-            Amplitude3 = NaN(size(Results));
-            Lifetime3 = NaN(size(Results));
-            Stretch3 = NaN(size(Results));
+            
             % Distribute results
             for Y = 1:size(Results, 1)
                 for X = 1:size(Results, 2)
