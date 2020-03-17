@@ -47,17 +47,17 @@ function NumberOfDecays = determineNumberOfExponentialDecays(X, Y)
     end
     % Attempt another way
     
-    % Do linear fit expecting one decay
-    FitType = fittype('B1 - A1 * x', 'Coefficients', {'B1', 'A1'}, 'Independent', {'x'}, 'Dependent', {'y'});
-    LowerLimit = [Min.B, Min.A]; % [B1, A1]
-    UpperLimit = [Max.B, Max.A];
-    StartGuess = [Start.B1, Start.A1];
-    Idx = 5;
-    for i = Idx:length(X)
-    [Fit{i}, GOF{i}] = fit(LinX(1:Idx), LinY(1:Idx), FitType, 'Lower', LowerLimit, 'Upper', UpperLimit, 'StartPoint', StartGuess);
-    end
-    GOF = GOF(5:end);
-    Fit = Fit(5:end);
-    SummedSquaresError = cellfun(@(x) x.A1, Fit);
-    while 
+%     % Do linear fit expecting one decay
+%     FitType = fittype('B1 - A1 * x', 'Coefficients', {'B1', 'A1'}, 'Independent', {'x'}, 'Dependent', {'y'});
+%     LowerLimit = [Min.B, Min.A]; % [B1, A1]
+%     UpperLimit = [Max.B, Max.A];
+%     StartGuess = [Start.B1, Start.A1];
+%     Idx = 5;
+%     for i = Idx:length(X)
+%     [Fit{i}, GOF{i}] = fit(LinX(1:Idx), LinY(1:Idx), FitType, 'Lower', LowerLimit, 'Upper', UpperLimit, 'StartPoint', StartGuess);
+%     end
+%     GOF = GOF(5:end);
+%     Fit = Fit(5:end);
+%     SummedSquaresError = cellfun(@(x) x.A1, Fit);
+%     while 
 end

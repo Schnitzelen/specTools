@@ -34,7 +34,7 @@ classdef readMsr < handle
             end
             obj.Binning = Binning;
             % If no number of decays is provided
-            if ~exist('Binning', 'var')
+            if ~exist('NumberOfDecays', 'var')
                 NumberOfDecays = NaN;
             end
             obj.NumberOfDecays = NumberOfDecays;
@@ -43,11 +43,11 @@ classdef readMsr < handle
                 ForceFitOnAllPixels = false;
             end
             obj.ForceFitOnAllPixels = ForceFitOnAllPixels;
+            % Begin work
             obj.importDependentPackages()
             obj.readSampleInformationFromFileName()
             obj.importData()
             obj.calculateLifetime()
-            %obj.calculateOverallLifetimeFull()
             %obj.saveResults()
         end
         function importDependentPackages(obj)
@@ -69,7 +69,7 @@ classdef readMsr < handle
             obj.Info = compileStructFromKeyValuePairs(Keys, Values);
             % Fetch images
             Image = Data{1}(:, 1);
-            % Save intensity image
+            % Store intensity image
             obj.IntensityImage = sum(cat(3, Image{:}), 3);
             % Fetch timebin numbers
             Info = regexp(Data{1}(:, 2), '; ', 'split');
