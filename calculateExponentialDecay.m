@@ -39,12 +39,12 @@ function S = calculateExponentialDecay(X, Y, Order, GuessFit)
             FitType = fittype('B + A1 * exp( -x / T1 ) + A2 * exp( -x / T2 )', 'Coefficients', {'B', 'A1', 'T1', 'A2', 'T2'});
             LowerLimit = [Min.B, Min.A, Min.T, Min.A, Min.T]; % [B, A1, T1, A2, T2]
             UpperLimit = [Max.B, Max.A, Max.T, Max.A, Max.T];
-            StartGuess = [Start.B, Start.B1, Start.T1, Start.B2, Start.T2];
+            StartGuess = [Start.B, Start.A1, Start.T1, Start.A2, Start.T2];
         case 3
             FitType = fittype('B + A1 * exp( -x / T1 ) + A2 * exp( -x / T2 ) + A3 * exp( -x / T3 )', 'Coefficients', {'B', 'A1', 'T1', 'A2', 'T2', 'A3', 'T3'});
             LowerLimit = [Min.B, Min.A, Min.T, Min.A, Min.T, Min.A, Min.T]; % [B, A1, T1, A2, T2, A3, T3]
             UpperLimit = [Max.B, Max.A, Max.T, Max.A, Max.T, Max.A, Max.T];
-            StartGuess = [Start.B, Start.B1, Start.T1, Start.B2, Start.T2, Start.B3, Start.T3];
+            StartGuess = [Start.B, Start.A1, Start.T1, Start.A2, Start.T2, Start.A3, Start.T3];
     end
     % Do fit
     Fit = fit(X, Y, FitType, 'Lower', LowerLimit, 'Upper', UpperLimit, 'StartPoint', StartGuess);

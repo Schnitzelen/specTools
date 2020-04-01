@@ -7,6 +7,7 @@ classdef readIfx < handle
         AbsoluteFileName
         Title
         Date
+        Replicate
         Type
         Solvent
         Concentration
@@ -19,7 +20,7 @@ classdef readIfx < handle
         Data
     end
     methods
-        function obj = readIfx(AbsoluteFileName)
+        function obj = readIfx(AbsoluteFileName, PeakExpectedAbove)
             obj.PeakExpectedAbove = 350;
             obj.SpectralRangeRelativeLimit = 0.05;
             % Ask for file, if none is provided
@@ -28,6 +29,11 @@ classdef readIfx < handle
                 AbsoluteFileName = strcat(Path, File);
             end
             obj.AbsoluteFileName = AbsoluteFileName;
+            % Ask for peak expect, if none is provided
+            if ~exist('PeakExpectedAbove', 'var')
+                PeakExpectedAbove = input('Please Specify Above Which Wavelength Peak Is Expected: ');
+            end            
+            obj.PeakExpectedAbove = PeakExpectedAbove;
             obj.readInfoFromFileName()
             obj.importData()
             obj.correctInstrumentArtifacts()
@@ -38,33 +44,7 @@ classdef readIfx < handle
         function readInfoFromFileName(obj)
             [~, FileName, ~] = fileparts(obj.AbsoluteFileName);
             obj.Title = FileName;
-            try
-                Info = strsplit(obj.Title, '_');
-                assert(length(Info) == 5);
-                Date = Info{1};
-                Type = Info{2};
-                Solvent = Info{3};
-                Concentration = strrep(Info{4}, ',', '.');
-                Idx = length(Concentration);
-                while Idx > 0
-                    if ~isnan(str2double(Concentration(Idx - 1)))
-                        break
-                    end
-                    Idx = Idx - 1; 
-                end
-                Unit = {'M', 'mM', 'uM', 'nM', 'pM'};
-                Factor = [10^0, 10^-3, 10^-6, 10^-9, 10^-12];
-                Factor = Factor(strcmp(Concentration(Idx:end), Unit));
-                Concentration = str2double(Concentration(1:(Idx - 1))) * Factor;
-                Compound = Info{5};
-            catch
-                return
-            end
-            obj.Date = Date;
-            obj.Type = Type;
-            obj.Solvent = Solvent;
-            obj.Concentration = Concentration;
-            obj.Compound = Compound;
+            [obj.Date, obj.Replicate, obj.Type, obj.Solvent, obj.Concentration.Value, obj.Compound] = readInformationFromFileName(obj.Title);
         end
         function importData(obj)
             % Read file
@@ -241,8 +221,8 @@ classdef readIfx < handle
             obj.Data.NormalizedCorrectedIntensity = obj.Data.CorrectedIntensity / max(obj.Data.CorrectedIntensity);    
         end
         function estimateSpectralRange(obj)
-            if ~isempty(obj.Concentration)
-                if obj.Concentration == 0
+            if ~isempty(obj.Concentration.Value)
+                if obj.Concentration.Value.Value == 0
                     return
                 end
             end

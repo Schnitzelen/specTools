@@ -47,7 +47,7 @@ classdef readSdt < handle
             obj.importDependentPackages()
             obj.readSampleInformationFromFileName()
             obj.importData()
-            obj.calculateLifetime()
+            %obj.calculateLifetime()
             %obj.saveResults()
         end
         function importDependentPackages(obj)
@@ -183,6 +183,8 @@ classdef readSdt < handle
                     end
                 end
             end
+            % Sort results based on lifetime
+            
             % Store results
             obj.Results.Background = round(Background, 5, 'significant');
             obj.Results.Amplitude1 = round(Amplitude1, 5, 'significant');
@@ -194,6 +196,8 @@ classdef readSdt < handle
             obj.Results.Amplitude3 = round(Amplitude3, 5, 'significant');
             obj.Results.Lifetime3 = round(Lifetime3, 5, 'significant');
             obj.Results.Stretch3 = round(Stretch3, 5, 'significant');
+            
+            
 %             % Drop data at timesteps that do not contain decay
 %             Time = obj.Data.Time(DecayIdx);
 %             Photons = Photons(DecayIdx);

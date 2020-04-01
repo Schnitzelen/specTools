@@ -1,6 +1,9 @@
 Name, Abbreviation, RefractiveIndex, Reference
 water, H2O, 1.330, Book: ISBN 978-0-321-18878-6
+water, PBS, 1.330, ?
+water, 0.1MNaOH, 1.330, ?
 ethanol, EtOH, 1.361, Book: ISBN 978-0-321-18878-6
+ethanol, NaOH-EtOH, 1.361, ?
 acetone, AcO, 1.36, Wikipedia
 glycerol, Glyc, 1.4729, Wikipedia
 methanol, MeOH, 1.3314, El-Kashef Hassan "The necessary requirements imposed on polar dielectric laser dye solvents" (1999)
@@ -8,3 +11,5 @@ chloroform, TCM, 1.4441, https://refractiveindex.info/?shelf=organic&book=chloro
 dichloromethane, DCM, 1.4125, https://refractiveindex.info/?shelf=organic&book=dichloromethane&page=Bertie
 isopropanol, iPrOH, 1.3776, https://en.wikipedia.org/wiki/Isopropyl_alcohol
 toluene, Tol, 1.4968, https://refractiveindex.info/?shelf=organic&book=toluene&page=Kedenburg
+acetonitrile, MeCN, 1.344, https://www.sigmaaldrich.com/chemistry/solvents/acetonitrile-center.html
+acetonitrile, NaOH-MeCN, 1.344, ?

@@ -1,6 +1,6 @@
 function [Date, Replicate, Type, Solvent, Concentration, Compound] = readInformationFromFileName(FileName)
     Info = strsplit(FileName, '_');
-    if length(Info) == 5
+    if length(Info) >= 5
         if contains(Info{1}, '-')
             SplitDate = strsplit(Info{1}, '-');
             Date = SplitDate{1};
@@ -10,11 +10,12 @@ function [Date, Replicate, Type, Solvent, Concentration, Compound] = readInforma
             Replicate = NaN;
         end
         Type = Info{2};
-        Solvent = Info{3};
+        Solvent = strrep(Info{3}, ',', '.');
         [Value, Unit] = splitStringIntoValueAndUnit(Info{4});
         Concentration.Value = Value;
         Concentration.Unit = Unit;
-        Compound = strrep(Info{5}, ',', '.');
+        Compound = strjoin(Info(5:end), '_');
+        Compound = strrep(Compound, ',', '.');
     else
         Date = NaN;
         Replicate = NaN;

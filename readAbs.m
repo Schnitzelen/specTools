@@ -6,12 +6,14 @@ classdef readAbs < handle
         AbsoluteFileName
         Title
         Date
+        Replicate
         Type
         Solvent
         Concentration
         Compound
         Replicates
         PeakExpectedAbove
+        PeakExpectedBelow
         SpectralRangeRelativeLimit
         SpectralRange
         MaxAbsorptionTarget
@@ -20,12 +22,7 @@ classdef readAbs < handle
         Data
     end
     methods
-        function obj = readAbs(AbsoluteFileName, PeakExpectedAbove)
-            % Ask for peak expect, if none is provided
-            if ~exist('PeakExpectedAbove', 'var')
-                PeakExpectedAbove = input('Please Specify Above Which Wavelength Peak Is Expected: ');
-            end            
-            obj.PeakExpectedAbove = PeakExpectedAbove;
+        function obj = readAbs(AbsoluteFileName, PeakExpectedAbove, PeakExpectedBelow)
             obj.SpectralRangeRelativeLimit = 0.05;
             obj.MaxAbsorptionTarget = 0.1;
             % Ask for file, if none is provided
@@ -34,6 +31,15 @@ classdef readAbs < handle
                 AbsoluteFileName = fullfile(Path, File);
             end
             obj.AbsoluteFileName = AbsoluteFileName;
+            % Ask for peak expect, if none is provided
+            if ~exist('PeakExpectedAbove', 'var')
+                PeakExpectedAbove = input('Please Specify Above Which Wavelength Peak Is Expected: ');
+            end            
+            obj.PeakExpectedAbove = PeakExpectedAbove;
+            if ~exist('PeakExpectedBelow', 'var')
+                PeakExpectedBelow = input('Please Specify Above Which Wavelength Peak Is Expected: ');
+            end            
+            obj.PeakExpectedBelow = PeakExpectedBelow;
             obj.readInfoFromFileName()
             obj.importData()
             obj.correctInstrumentArtifacts()
@@ -43,33 +49,7 @@ classdef readAbs < handle
         function readInfoFromFileName(obj)
             [~, FileName, ~] = fileparts(obj.AbsoluteFileName);
             obj.Title = FileName;
-            try
-                Info = strsplit(obj.Title, '_');
-                assert(length(Info) == 5);
-                Date = Info{1};
-                Type = Info{2};
-                Solvent = Info{3};
-                Concentration = strrep(Info{4}, ',', '.');
-                Idx = length(Concentration);
-                while Idx > 0
-                    if ~isnan(str2double(Concentration(Idx - 1)))
-                        break
-                    end
-                    Idx = Idx - 1;
-                end
-                Unit = {'M', 'mM', 'uM', 'nM', 'pM'};
-                Factor = [10^0, 10^-3, 10^-6, 10^-9, 10^-12];
-                Factor = Factor(strcmp(Concentration(Idx:end), Unit));
-                Concentration = str2double(Concentration(1:(Idx - 1))) * Factor;
-                Compound = Info{5};
-            catch
-                return
-            end
-            obj.Date = Date;
-            obj.Type = Type;
-            obj.Solvent = Solvent;
-            obj.Concentration = Concentration;
-            obj.Compound = Compound;
+            [obj.Date, obj.Replicate, obj.Type, obj.Solvent, obj.Concentration, obj.Compound] = readInformationFromFileName(obj.Title);
         end
         function importData(obj)
             % Get all text in file
@@ -147,6 +127,7 @@ classdef readAbs < handle
             assert(~isempty(obj.Data), 'No data could be located within file');
         end
         function correctInstrumentArtifacts(obj)
+            % Maybe also necessary to move plot to 
             % Fetch variables to work on
             Wavelength = obj.Data.Wavelength;
             Absorption = obj.Data.Absorption;
@@ -204,36 +185,44 @@ classdef readAbs < handle
 %                     plot(Wavelength, Absorption)
 %                     hold off
                 else
+%                     TestAbsorption = Absorption;
+%                     TestAbsorption(AffectedIdx) = NaN;
+%                     gaussianInterpolation(Wavelength, TestAbsorption, true);
                     % In small increments, everything is a straight line:
                     % Get linear fit for edge above perturbed region
                     AboveArtifactIdx = max(NonPerturbedIdx) : length(Absorption);
                     AboveArtifactWavelength = Wavelength(AboveArtifactIdx);
                     AboveArtifactAbsorption = Absorption(AboveArtifactIdx);
                     SmoothAboveArtifactAbsorption = smooth(AboveArtifactAbsorption);
-                    AboveArtifactFit = polyfit(AboveArtifactWavelength(1:3), SmoothAboveArtifactAbsorption(1:3), 1);
+                    AboveArtifactFitWavelengthRange = [min(AboveArtifactWavelength), min(AboveArtifactWavelength) + 3];
+                    AboveArtifactFitWavelengthIdx = find(min(AboveArtifactFitWavelengthRange) <= AboveArtifactWavelength & AboveArtifactWavelength <= max(AboveArtifactFitWavelengthRange));
+                    AboveArtifactFit = polyfit(AboveArtifactWavelength(AboveArtifactFitWavelengthIdx), SmoothAboveArtifactAbsorption(AboveArtifactFitWavelengthIdx), 1);
                     % Get linear fit for edge below perturbed region
                     BelowArtifactIdx = 1 : min(NonPerturbedIdx);
                     BelowArtifactWavelength = Wavelength(BelowArtifactIdx);
                     BelowArtifactAbsorption = Absorption(BelowArtifactIdx);
                     SmoothBelowArtifactAbsorption = smooth(BelowArtifactAbsorption);
-                    BelowArtifactFit = polyfit(BelowArtifactWavelength(end-3:end), SmoothBelowArtifactAbsorption(end-3:end), 1);
-                    %scatter(BelowArtifactWavelength, BelowArtifactAbsorption, 'b')
-                    %hold on
-                    %scatter(AboveArtifactWavelength, AboveArtifactAbsorption, 'b')
-                    %ylim([0 0.1]);
+                    BelowArtifactFitWavelengthRange = [max(BelowArtifactWavelength) - 3, max(BelowArtifactWavelength)];
+                    BelowArtifactFitWavelengthIdx = find(min(BelowArtifactFitWavelengthRange) <= BelowArtifactWavelength & BelowArtifactWavelength <= max(BelowArtifactFitWavelengthRange));
+                    BelowArtifactFit = polyfit(BelowArtifactWavelength(BelowArtifactFitWavelengthIdx), SmoothBelowArtifactAbsorption(BelowArtifactFitWavelengthIdx), 1);
+%                     scatter(BelowArtifactWavelength, BelowArtifactAbsorption, 'b')
+%                     hold on
+%                     scatter(AboveArtifactWavelength, AboveArtifactAbsorption, 'b')
+%                     ylim([0 0.1]);
                     % Combine fits to correct
-                    for i = 1:length(PerturbedIdx)
-                        PerturbedWavelength = Wavelength(PerturbedIdx(i));
-                        AboveArtifactFitContribution = AboveArtifactFit(1) * PerturbedWavelength + AboveArtifactFit(2);
-                        BelowArtifactFitContribution = BelowArtifactFit(1) * PerturbedWavelength + BelowArtifactFit(2);
-                        % Using logistic function to calculate fraction of
-                        % contribution for each fit
-                        Fraction = 1 / ( 1 + exp(- (i - (length(PerturbedIdx) / 2))));
-                        % Moving from below-fit towards above-fit
-                        CombinedContribution = Fraction * AboveArtifactFitContribution + ( 1 - Fraction ) * BelowArtifactFitContribution;
-                        Absorption(PerturbedIdx(i)) = CombinedContribution;
-                        %scatter(PerturbedWavelength, TotalContribution, 'g')
-                    end
+%                     for i = 1:length(PerturbedIdx)
+%                         PerturbedWavelength = Wavelength(PerturbedIdx(i));
+%                         AboveArtifactFitContribution = AboveArtifactFit(1) * PerturbedWavelength + AboveArtifactFit(2);
+%                         BelowArtifactFitContribution = BelowArtifactFit(1) * PerturbedWavelength + BelowArtifactFit(2);
+%                         % Using logistic function to calculate fraction of
+%                         % contribution for each fit
+%                         Steepness = 0.25;
+%                         Fraction = 1 / ( 1 + exp(- Steepness * (i - (length(PerturbedIdx) / 2))));
+%                         % Moving from below-fit towards above-fit
+%                         CombinedContribution = Fraction * AboveArtifactFitContribution + ( 1 - Fraction ) * BelowArtifactFitContribution;
+%                         Absorption(PerturbedIdx(i)) = CombinedContribution;
+%                         %scatter(PerturbedWavelength, CombinedContribution, 'g')
+%                     end
                 end
             end
             % Store corrected absorption
@@ -244,11 +233,11 @@ classdef readAbs < handle
                 Peak = NaN;
                 Min = NaN;
                 Max = NaN;
-                if obj.Concentration > 0
+                if obj.Concentration.Value > 0
                     % Calculate normalized corrected absorption
                     Wavelength = obj.Data.Wavelength;
                     Absorption = obj.Data.CorrectedAbsorption;
-                    Idx = Wavelength > obj.PeakExpectedAbove;
+                    Idx = obj.PeakExpectedAbove < Wavelength & Wavelength < obj.PeakExpectedBelow;
                     [MaxAbs, MaxIdx] = max(Absorption(Idx));
                     NormalizedAbsorption = Absorption / MaxAbs;
                     obj.Data.NormalizedCorrectedAbsorption = NormalizedAbsorption;
@@ -286,10 +275,10 @@ classdef readAbs < handle
         function estimateOptimalConcentration(obj)
             if ~isempty(obj.Concentration)
                 obj.AdvisedConcentration = NaN;
-                if obj.Concentration > 0
+                if obj.Concentration.Value > 0
                     PeakAbsorption = obj.Data.Absorption(obj.Data.Wavelength == obj.SpectralRange.Peak);
                     Factor = obj.MaxAbsorptionTarget / PeakAbsorption;
-                    obj.AdvisedConcentration = obj.Concentration * Factor;
+                    obj.AdvisedConcentration = obj.Concentration.Value * Factor;
                 end
             end
         end
