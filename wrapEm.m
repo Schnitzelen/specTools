@@ -77,9 +77,9 @@ classdef wrapEm < handle
             Color = arrayfun(@(r, g, b) [r g b], Color(:, 1), Color(:, 2), Color(:, 3), 'UniformOutput', false);
             cellfun(@(x, y) plot(x.Data.EmissionWavelength, x.Data.CorrectedIntensity, 'Color', y, 'LineWidth', 2, 'DisplayName', x.Solvent), obj.Data, Color);
             legend({}, 'Interpreter', 'latex', 'Location', 'northeast');
-            title(sprintf('%s{Emission of %s}', '\textbf', obj.Data{1}.Compound), 'Interpreter', 'latex');
-            xlabel('Wavelength [nm]', 'Interpreter', 'latex');
-            ylabel('Intensity [a.u.]', 'Interpreter', 'latex');
+            %title(sprintf('%s{Emission of %s}', '\textbf', obj.Data{1}.Compound), 'Interpreter', 'latex');
+            xlabel('wavelength (nm)', 'Interpreter', 'latex');
+            ylabel('intensity (a.u.)', 'Interpreter', 'latex');
             YMax = max(cellfun(@(x) max(x.Data.Intensity(x.Data.EmissionWavelength > x.PeakExpectedAbove)), obj.Data));
             ylim([0, YMax * 1.1]);
             XMin = min(cellfun(@(x) min(x.Data.EmissionWavelength), obj.Data));
