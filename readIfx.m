@@ -21,7 +21,7 @@ classdef readIfx < handle
     end
     methods
         function obj = readIfx(AbsoluteFileName, PeakExpectedAbove)
-            obj.PeakExpectedAbove = 350;
+            PeakExpectedAbove = 350;
             obj.SpectralRangeRelativeLimit = 0.05;
             % Ask for file, if none is provided
             if ~exist('AbsoluteFileName', 'var')
@@ -44,7 +44,7 @@ classdef readIfx < handle
         function readInfoFromFileName(obj)
             [~, FileName, ~] = fileparts(obj.AbsoluteFileName);
             obj.Title = FileName;
-            [obj.Date, obj.Replicate, obj.Type, obj.Solvent, obj.Concentration.Value, obj.Compound] = readInformationFromFileName(obj.Title);
+            [obj.Date, obj.Replicate, obj.Type, obj.Solvent, obj.Concentration, obj.Compound] = readInformationFromFileName(obj.Title);
         end
         function importData(obj)
             % Read file
@@ -221,8 +221,8 @@ classdef readIfx < handle
             obj.Data.NormalizedCorrectedIntensity = obj.Data.CorrectedIntensity / max(obj.Data.CorrectedIntensity);    
         end
         function estimateSpectralRange(obj)
-            if ~isempty(obj.Concentration.Value)
-                if obj.Concentration.Value.Value == 0
+            if ~isempty(obj.Concentration)
+                if obj.Concentration.Value == 0
                     return
                 end
             end
