@@ -4,6 +4,7 @@ classdef readAbs < handle
     % Class used for reading and containing absorption data
     properties
         AbsoluteFileName
+        Importer
         Title
         Date
         Replicate
@@ -14,35 +15,48 @@ classdef readAbs < handle
         Replicates
         PeakExpectedAbove
         PeakExpectedBelow
-        SpectralRangeRelativeLimit
+        SpectralRangeThreshold
         SpectralRange
-        MaxAbsorptionTarget
+        TargetAbsorptionMax
         AdvisedConcentration
         Info
         Data
     end
     methods
-        function obj = readAbs(AbsoluteFileName, PeakExpectedAbove, PeakExpectedBelow)
-            obj.SpectralRangeRelativeLimit = 0.05;
-            obj.MaxAbsorptionTarget = 0.1;
+        function obj = readAbs(AbsoluteFileName, varargin)
             % Ask for file, if none is provided
-            if ~exist('AbsoluteFileName', 'var')
-                [File, Path] = uigetfile('*.txt', 'Please Select Data to Import');
+            if ~exist('AbsoluteFileName', 'var') || isempty(AbsoluteFileName)
+                [File, Path] = uigetfile('*_abs_*', 'Please Select Data To Import');
+                assert(isa(Path, 'char') & isa(File, 'char'), 'No File Selected!')
                 AbsoluteFileName = fullfile(Path, File);
             end
             obj.AbsoluteFileName = AbsoluteFileName;
-            % Ask for peak expect, if none is provided
-            if ~exist('PeakExpectedAbove', 'var')
-                PeakExpectedAbove = input('Please Specify Above Which Wavelength Peak Is Expected: ');
-            end            
-            obj.PeakExpectedAbove = PeakExpectedAbove;
-            if ~exist('PeakExpectedBelow', 'var')
-                PeakExpectedBelow = input('Please Specify Above Which Wavelength Peak Is Expected: ');
-            end            
-            obj.PeakExpectedBelow = PeakExpectedBelow;
+            % Set default values
+            obj.PeakExpectedAbove = 350;
+            obj.PeakExpectedBelow = 800;
+            obj.SpectralRangeThreshold = 0.05;
+            obj.TargetAbsorptionMax = 0.1;
+            % Handle varargin
+            assert(rem(length(varargin), 2) == 0, 'Arguments Cannot Be Parsed');
+            for i = 1:2:length(varargin)
+                switch varargin{i}
+                    case 'PeakExpectedAbove'
+                        obj.PeakExpectedAbove = varargin{i + 1};
+                    case 'PeakExpectedBelow'
+                        obj.PeakExpectedBelow = varargin{i + 1};
+                    case 'SpectralRangeThreshold'
+                        obj.SpectralRangeThreshold = varargin{i + 1};
+                    case 'TargetAbsorptionMax'
+                        obj.TargetAbsorptionMax = varargin{i + 1};
+                    otherwise
+                        error('Unknown Argument Passed: %s', varargin{i})
+                end
+            end
+            % Import and handle data
             obj.readInfoFromFileName()
             obj.importData()
-            obj.correctInstrumentArtifacts()
+            %obj.correctInstrumentArtifacts()
+            obj.normalizeAbsorption()
             obj.estimateSpectralRange()
             obj.estimateOptimalConcentration()
         end
@@ -52,79 +66,17 @@ classdef readAbs < handle
             [obj.Date, obj.Replicate, obj.Type, obj.Solvent, obj.Concentration, obj.Compound] = readInformationFromFileName(obj.Title);
         end
         function importData(obj)
-            % Get all text in file
-            Text = fileread(obj.AbsoluteFileName);
-            Text = strsplit(Text, '\r\n').';
-            % Separate information
-            obj.Replicates = sum(strcmp(Text, 'Data Points'));
-            Header = cell(obj.Replicates, 1);
-            Peaks = cell(obj.Replicates, 1);
-            Data = cell(obj.Replicates, 1);
-            i = 1;
-            for r = 1:obj.Replicates
-                while ~strcmp(Text{i}, 'Peaks')
-                    Header{r}{end + 1, 1} = Text{i};
-                    i = i + 1;
-                end
-                while ~strcmp(Text{i}, 'Data Points')
-                    Peaks{r}{end + 1, 1} = Text{i};
-                    i = i + 1;
-                end
-                while ~contains(Text{i}, 'Sample:') && i < length(Text)
-                    Data{r}{end + 1, 1} = Text{i};
-                    i = i + 1;
-                end
+            % Determine importer to use
+            [~, ~, Ext] = fileparts(obj.AbsoluteFileName);
+            switch Ext
+                case '.TXT'
+                    obj.Importer = @TxtFile;
+                case '.csv'
+                    obj.Importer = @CsvFile;
+                otherwise
+                    error('No Importer For This Filetype')
             end
-            % Create header-data array
-            obj.Info = cell(obj.Replicates, 1);
-            for r = 1:obj.Replicates
-                Info = regexp(Header{r}, ':\t', 'split');
-                i = 1;
-                while length(Info{i}) ~= 1
-                    obj.Info{r}.(strrep(Info{i}{1}, ' ', '')) = Info{i}{2};
-                    i = i + 1;
-                end
-                while i <= length(Info)
-                    j = i;
-                    i = i + 1;
-                    while i <= length(Info) && length(Info{i}) ~= 1
-                        obj.Info{r}.(strrep(Info{j}{1}, ' ', '')).(strrep(Info{i}{1}, ' ', '')) = Info{i}{2};
-                        i = i + 1;
-                    end
-                end
-            end
-            % Create peak-data array
-            for r = 1:obj.Replicates
-                Columns = Peaks{r}{2};
-                Columns = strsplit(Columns, '\t');
-                Columns = regexp(Columns, ' ', 'split');
-                Columns = cellfun(@(x) x{1}, Columns, 'UniformOutput', false);
-                Values = Peaks{r}(3:end);
-                if isempty(Values)
-                    Values = NaN(1, length(Columns));
-                else
-                    Values = regexp(Values, '\t', 'split');
-                    Values = vertcat(Values{:});
-                    Values = str2double(Values);
-                end
-                obj.Info{r}.Peaks = array2table(Values, 'VariableNames', Columns);
-            end
-            % Create data array
-            for r = 1:obj.Replicates
-                RawData = Data{r}(3:end);
-                RawData = regexp(RawData, '\t', 'split');
-                RawData = vertcat(RawData{:});
-                RawData = str2double(RawData);
-                obj.Info{r}.RawData = array2table(RawData, 'VariableNames', {'Wavelength', 'Absorption'});
-            end
-            Wavelength = obj.Info{1}.RawData.Wavelength;
-            Absorption = cellfun(@(x) x.RawData.Absorption, obj.Info.', 'UniformOutput', false);
-            Absorption = horzcat(Absorption{:});
-            AbsorptionSD = std(Absorption, [], 2);
-            Absorption = mean(Absorption, 2);
-            obj.Data = table(Wavelength, Absorption, AbsorptionSD);
-            obj.Data = sortrows(obj.Data);
-            assert(~isempty(obj.Data), 'No data could be located within file');
+            [obj.Data, obj.Info] = obj.Importer(obj.AbsoluteFileName);
         end
         function correctInstrumentArtifacts(obj)
             % Maybe also necessary to move plot to 
@@ -228,112 +180,80 @@ classdef readAbs < handle
             % Store corrected absorption
             obj.Data.CorrectedAbsorption = Absorption;
         end
+        function normalizeAbsorption(obj)
+            obj.Data.NormalizedAbsorption = obj.Data.Absorption / max(obj.Data.Absorption);
+        end
         function estimateSpectralRange(obj)
-            if ~isempty(obj.Concentration)
-                Peak = NaN;
-                Min = NaN;
-                Max = NaN;
-                if obj.Concentration.Value > 0
-                    % Calculate normalized corrected absorption
-                    Wavelength = obj.Data.Wavelength;
-                    Absorption = obj.Data.CorrectedAbsorption;
-                    Idx = obj.PeakExpectedAbove < Wavelength & Wavelength < obj.PeakExpectedBelow;
-                    [MaxAbs, MaxIdx] = max(Absorption(Idx));
-                    NormalizedAbsorption = Absorption / MaxAbs;
-                    obj.Data.NormalizedCorrectedAbsorption = NormalizedAbsorption;
-                    % If max abs appears for more wavelengths, find middle
-                    if length(Absorption == MaxAbs) > 1
-                        MaxIdx = round(mean(find(Absorption(Idx) == MaxAbs)));
-                        MaxWavelength = Wavelength(Idx);
-                        MaxWavelength = MaxWavelength(MaxIdx);
-                        MaxIdx = find(Wavelength == MaxWavelength);
-                    end
-                    % Determine spectral range
-                    if MaxAbs > 10 * 0.0003 % smallest abs step = 0.0003
-                        Peak = Wavelength(MaxIdx);
-                        Idx = MaxIdx;
-                        while Idx > 0
-                            if NormalizedAbsorption(Idx) <= obj.SpectralRangeRelativeLimit
-                                Min = Wavelength(Idx);
-                                break
-                            end
-                            Idx = Idx - 1;
-                        end
-                        Idx = MaxIdx;
-                        while Idx <= length(NormalizedAbsorption)
-                            if NormalizedAbsorption(Idx) <= obj.SpectralRangeRelativeLimit
-                                Max = Wavelength(Idx);
-                                break
-                            end
-                            Idx = Idx + 1;
-                        end
-                    end
-                end
-                obj.SpectralRange = table(Min, Peak, Max);
+            if isempty(obj.Concentration) || obj.Concentration.Value == 0
+                return
             end
+            [Low, Peak, High] = determineSpectralRange(obj.Data.Wavelength, obj.Data.Absorption, 'Threshold', obj.SpectralRangeThreshold, 'PeakExpectedAbove', obj.PeakExpectedAbove);
+            obj.SpectralRange.Min = Low;
+            obj.SpectralRange.Peak = Peak;
+            obj.SpectralRange.Max = High;
         end
         function estimateOptimalConcentration(obj)
-            if ~isempty(obj.Concentration)
+            if isempty(obj.Concentration) || obj.Concentration.Value == 0
                 obj.AdvisedConcentration = NaN;
-                if obj.Concentration.Value > 0
-                    PeakAbsorption = obj.Data.Absorption(obj.Data.Wavelength == obj.SpectralRange.Peak);
-                    Factor = obj.MaxAbsorptionTarget / PeakAbsorption;
-                    obj.AdvisedConcentration = obj.Concentration.Value * Factor;
-                end
+                return
             end
+            PeakAbsorption = obj.Data.Absorption(obj.Data.Wavelength == obj.SpectralRange.Peak);
+            Factor = obj.TargetAbsorptionMax / PeakAbsorption;
+            obj.AdvisedConcentration.Value = obj.Concentration.Value * Factor;
+            obj.AdvisedConcentration.Unit = obj.Concentration.Unit;
         end
-        function Fig = plotRawAbsorption(obj)
-            Fig = figure;
-            hold on
-            if obj.Replicates == 1
-                plot(obj.Data.Wavelength, obj.Data.Absorption, 'LineWidth', 2);
-            else
-                errorbar(obj.Data.Wavelength, obj.Data.Absorption, obj.Data.SD, 'LineWidth', 2);
-            end
-            Compound = strrep(obj.Compound, '%', '\%');
-            Solvent = strrep(obj.Solvent, '%', '\%');
-            title(sprintf('%s{Raw Absorption of %s in %s}', '\textbf', Compound, Solvent), 'Interpreter', 'latex');
-            xlabel('Wavelength (nm)', 'Interpreter', 'latex');
-            ylabel('Absorption (a.u.)', 'Interpreter', 'latex');
-            YMax = max(obj.Data.Absorption(obj.Data.Wavelength > obj.PeakExpectedAbove));
-            ylim([0, YMax * 1.1]);
-            xlim([min(obj.Data.Wavelength), max(obj.Data.Wavelength)]);
-            hold off
-        end
-        function Fig = plotCorrectedAbsorption(obj)
-            Fig = figure;
-            hold on
-            if obj.Replicates == 1
-                plot(obj.Data.Wavelength, obj.Data.CorrectedAbsorption, 'LineWidth', 2);
-            else
-                errorbar(obj.Data.Wavelength, obj.Data.CorrectedAbsorption, obj.Data.SD, 'LineWidth', 2);
-            end
-            Compound = strrep(obj.Compound, '%', '\%');
-            Solvent = strrep(obj.Solvent, '%', '\%');
-            title(sprintf('%s{Corrected Absorption of %s in %s}', '\textbf', Compound, Solvent), 'Interpreter', 'latex');
-            xlabel('Wavelength (nm)', 'Interpreter', 'latex');
-            ylabel('Absorption (a.u.)', 'Interpreter', 'latex');
-            YMax = max(obj.Data.CorrectedAbsorption(obj.Data.Wavelength > obj.PeakExpectedAbove));
-            ylim([0, YMax * 1.1]);
-            xlim([min(obj.Data.Wavelength), max(obj.Data.Wavelength)]);
-            hold off
-        end
-        function Fig = plotNormalizedCorrectedAbsorption(obj)
-            Fig = figure;
-            hold on
-            if obj.Replicates == 1
-                plot(obj.Data.Wavelength, obj.Data.NormalizedCorrectedAbsorption, 'LineWidth', 2);
-            else
-                errorbar(obj.Data.Wavelength, obj.Data.NormalizedCorrectedAbsorption, obj.Data.SD, 'LineWidth', 2);
-            end
-            Compound = strrep(obj.Compound, '%', '\%');
-            Solvent = strrep(obj.Solvent, '%', '\%');
-            title(sprintf('%s{Normalized Corrected Absorption of %s in %s}', '\textbf', Compound, Solvent), 'Interpreter', 'latex');
-            xlabel('Wavelength (nm)', 'Interpreter', 'latex');
-            ylabel('Absorption (a.u.)', 'Interpreter', 'latex');
-            ylim([0, 1]);
-            xlim([min(obj.Data.Wavelength), max(obj.Data.Wavelength)]);
-            hold off
-        end
+%         function Fig = plotRawAbsorption(obj)
+%             Fig = figure;
+%             hold on
+%             if obj.Replicates == 1
+%                 plot(obj.Data.Wavelength, obj.Data.Absorption, 'LineWidth', 2);
+%             else
+%                 errorbar(obj.Data.Wavelength, obj.Data.Absorption, obj.Data.SD, 'LineWidth', 2);
+%             end
+%             Compound = strrep(obj.Compound, '%', '\%');
+%             Solvent = strrep(obj.Solvent, '%', '\%');
+%             title(sprintf('%s{Raw Absorption of %s in %s}', '\textbf', Compound, Solvent), 'Interpreter', 'latex');
+%             xlabel('Wavelength (nm)', 'Interpreter', 'latex');
+%             ylabel('Absorption (a.u.)', 'Interpreter', 'latex');
+%             YMax = max(obj.Data.Absorption(obj.Data.Wavelength > obj.PeakExpectedAbove));
+%             ylim([0, YMax * 1.1]);
+%             xlim([min(obj.Data.Wavelength), max(obj.Data.Wavelength)]);
+%             hold off
+%         end
+%         function Fig = plotCorrectedAbsorption(obj)
+%             Fig = figure;
+%             hold on
+%             if obj.Replicates == 1
+%                 plot(obj.Data.Wavelength, obj.Data.CorrectedAbsorption, 'LineWidth', 2);
+%             else
+%                 errorbar(obj.Data.Wavelength, obj.Data.CorrectedAbsorption, obj.Data.SD, 'LineWidth', 2);
+%             end
+%             Compound = strrep(obj.Compound, '%', '\%');
+%             Solvent = strrep(obj.Solvent, '%', '\%');
+%             title(sprintf('%s{Corrected Absorption of %s in %s}', '\textbf', Compound, Solvent), 'Interpreter', 'latex');
+%             xlabel('Wavelength (nm)', 'Interpreter', 'latex');
+%             ylabel('Absorption (a.u.)', 'Interpreter', 'latex');
+%             YMax = max(obj.Data.CorrectedAbsorption(obj.Data.Wavelength > obj.PeakExpectedAbove));
+%             ylim([0, YMax * 1.1]);
+%             xlim([min(obj.Data.Wavelength), max(obj.Data.Wavelength)]);
+%             hold off
+%         end
+%         function Fig = plotNormalizedCorrectedAbsorption(obj)
+%             Fig = figure;
+%             hold on
+%             if obj.Replicates == 1
+%                 plot(obj.Data.Wavelength, obj.Data.NormalizedCorrectedAbsorption, 'LineWidth', 2);
+%             else
+%                 errorbar(obj.Data.Wavelength, obj.Data.NormalizedCorrectedAbsorption, obj.Data.SD, 'LineWidth', 2);
+%             end
+%             Compound = strrep(obj.Compound, '%', '\%');
+%             Solvent = strrep(obj.Solvent, '%', '\%');
+%             title(sprintf('%s{Normalized Corrected Absorption of %s in %s}', '\textbf', Compound, Solvent), 'Interpreter', 'latex');
+%             xlabel('Wavelength (nm)', 'Interpreter', 'latex');
+%             ylabel('Absorption (a.u.)', 'Interpreter', 'latex');
+%             ylim([0, 1]);
+%             xlim([min(obj.Data.Wavelength), max(obj.Data.Wavelength)]);
+%             hold off
+%         end
     end
 end
