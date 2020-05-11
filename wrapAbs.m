@@ -21,7 +21,7 @@ classdef wrapAbs < handle
         end
         function importData(obj)
             % Get all abs-files in folder
-            D = dir(fullfile(obj.AbsoluteFolderPath, '**', '*_abs_*.TXT'));
+            D = dir(fullfile(obj.AbsoluteFolderPath, '**', '*_abs_*.*'));
             % If more of the same measurement, keep only most recent
             Info = regexp({D.name}.', '_', 'split');
             Info = vertcat(Info{:});
@@ -41,7 +41,7 @@ classdef wrapAbs < handle
             obj.Data = arrayfun(@(x) readAbs(fullfile(x.folder, x.name)), D, 'UniformOutput', false);
             % If more than one file, sort according to polarity
             if length(obj.Data) > 1
-                PolarityTable = readtable(fullfile(getenv('userprofile'), '\Documents\MATLAB\SpecTools\ref_polarity.csv'));
+                PolarityTable = readtable(fullfile(getenv('userprofile'), 'Documents', 'MATLAB\SpecTools\ref_polarity.csv'));
                 [~, PolaritySorting] = sort(cellfun(@(x) PolarityTable.RelativePolarity(strcmp(PolarityTable.Abbreviation, x.Solvent)), obj.Data), 'descend');
                 obj.Data = obj.Data(PolaritySorting);
             end
@@ -63,7 +63,7 @@ classdef wrapAbs < handle
         function buildResultsTable(obj)
             Solvent = cellfun(@(x) x.Solvent, obj.Data, 'UniformOutput', false);
             PeakExpectedAbove = cellfun(@(x) x.PeakExpectedAbove, obj.Data);
-            PeakDetectionLimit = cellfun(@(x) x.SpectralRangeRelativeLimit, obj.Data);
+            PeakDetectionLimit = cellfun(@(x) x.SpectralRangeThreshold, obj.Data);
             SpectralRangeMin = cellfun(@(x) x.SpectralRange.Min, obj.Data);
             PeakTop = cellfun(@(x) x.SpectralRange.Peak, obj.Data);
             SpectralRangeMax = cellfun(@(x) x.SpectralRange.Max, obj.Data);
@@ -76,9 +76,9 @@ classdef wrapAbs < handle
             Color = arrayfun(@(r, g, b) [r g b], Color(:, 1), Color(:, 2), Color(:, 3), 'UniformOutput', false);
             cellfun(@(x, y) plot(x.Data.Wavelength, x.Data.Absorption, 'Color', y, 'LineWidth', 2, 'DisplayName', x.Solvent), obj.Data, Color);
             legend({}, 'Interpreter', 'latex', 'Location', 'northwest');
-            title(sprintf('%s{Absorption of %s}', '\textbf', obj.Data{1}.Compound), 'Interpreter', 'latex');
-            xlabel('Wavelength [nm]', 'Interpreter', 'latex');
-            ylabel('Absorption [a.u.]', 'Interpreter', 'latex');
+            %title(sprintf('%s{Absorption of %s}', '\textbf', obj.Data{1}.Compound), 'Interpreter', 'latex');
+            xlabel('wavelength (nm)', 'Interpreter', 'latex');
+            ylabel('absorption (a.u.)', 'Interpreter', 'latex');
             YMax = max(cellfun(@(x) max(x.Data.Absorption(x.Data.Wavelength > x.PeakExpectedAbove)), obj.Data));
             ylim([0, YMax * 1.1]);
             XMin = min(cellfun(@(x) min(x.Data.Wavelength), obj.Data));
