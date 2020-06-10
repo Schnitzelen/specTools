@@ -41,8 +41,8 @@ function planQuantumYieldExperiment(varargin)
     end
     assert(~isempty(ReferenceFolder) && ~isempty(ReferenceFolder{1}), 'No Reference Selected!')
     if isempty(Solvent)
-        %Solvent = 'MeOH TCM Tol';
-        Solvent = input('Please Specify Solvent(s) (separate multiple solvents by space): ', 's');
+        Solvent = 'MeOH TCM Tol';
+        %Solvent = input('Please Specify Solvent(s) (separate multiple solvents by space): ', 's');
         if contains(Solvent, ' ')
             Solvent = strsplit(Solvent, ' ');
         elseif isa(Solvent, 'char')

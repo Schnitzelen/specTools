@@ -38,6 +38,9 @@ function [Report, Fig] = estimateOptimalAbsorptionOverlap(varargin)
     % If any arguments are not defined by now, propt user
     if isempty(SampleFolder)
         SampleFolder = uigetdir(pwd(), 'Please Choose Sample Folder');
+        if isa(SampleFolder, 'char')
+            SampleFolder = {SampleFolder};
+        end
 %         SampleFolder = cell(0);
 %         Folder = uigetdir(pwd(), 'Please Choose First Sample Folder');
 %         while isa(Folder, 'char')
@@ -48,12 +51,14 @@ function [Report, Fig] = estimateOptimalAbsorptionOverlap(varargin)
     assert(~isempty(SampleFolder) && ~isempty(SampleFolder{1}), 'No Sample Selected!')
     if isempty(ReferenceFolder)
         ReferenceFolder = uigetdir(pwd(), 'Please Choose Reference Folder');
+        if isa(ReferenceFolder, 'char')
+            ReferenceFolder = {ReferenceFolder};
+        end
     end
     assert(~isempty(ReferenceFolder) && ~isempty(ReferenceFolder{1}), 'No Reference Selected!')
     if isempty(SampleSolvent)
         SampleSolvent = input('Please Specify Solvent(s) (separate multiple solvents by space): ', 's');
         if contains(SampleSolvent, ' ')
-            disp('here')
             SampleSolvent = strsplit(SampleSolvent, ' ');
         elseif isa(SampleSolvent, 'char')
             SampleSolvent = {SampleSolvent};
