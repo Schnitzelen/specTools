@@ -1,7 +1,7 @@
-function calculateQuantumYield(varargin)
+function Results = calculateQuantumYield(varargin)
     % Prepare arguments
-    SampleFolder = {};
-    ReferenceFolder = {};
+    SampleFolder = '';
+    ReferenceFolder = '';
     % Handle varargin
     assert(rem(length(varargin), 2) == 0, 'Arguments Cannot Be Parsed');
     for i = 1:2:length(varargin)
@@ -16,26 +16,28 @@ function calculateQuantumYield(varargin)
     end
     % If any arguments are not defined by now, prompt user
     if isempty(SampleFolder)
-        SampleFolder{1} = uigetdir(pwd(), 'Please Choose Sample Folder');
+        SampleFolder = uigetdir(pwd(), 'Please Choose QY Sample Folder');
     end
-    assert(~isempty(SampleFolder) && isa(SampleFolder{1}, 'char'), 'No Sample Selected!')
+    assert(~isempty(SampleFolder), 'No Sample Selected!')
     if isempty(ReferenceFolder)
-        %ReferenceFolder{1} = 'C:\Users\schni\OneDrive - Syddansk Universitet\Samples\NR';
-        ReferenceFolder{1} = uigetdir(pwd(), 'Please Choose Reference Folder');
+        %ReferenceFolder = 'C:\Users\schni\OneDrive - Syddansk Universitet\Samples\NR';
+        ReferenceFolder = uigetdir(pwd(), 'Please Choose QY Reference Folder');
     end
-    assert(~isempty(ReferenceFolder) && isa(ReferenceFolder{1}, 'char'), 'No Reference Selected!')
+    assert(~isempty(ReferenceFolder), 'No Reference Selected!')
     % Locate sample files
-    SampleFiles =  dir(fullfile(SampleFolder{1}, 'data', '*_qy_*'));
-    % Fetch unique experiment dates
+    SampleFiles =  dir(fullfile(SampleFolder, 'data', '*_qy_*'));
+    % Fetch unique experiment dates and solvents
     [~, FileNames, ~] = cellfun(@(x) fileparts(x), {SampleFiles.name}, 'UniformOutput', false);
     FileNames = regexp(FileNames, '_', 'split');
     SampleDates = cellfun(@(x) x{1}, FileNames, 'UniformOutput', false);
-    UniqueDates = unique(SampleDates);
+    SampleSolvents = cellfun(@(x) x{3}, FileNames, 'UniformOutput', false);
+    [~, UniqueIdx, ~] = unique(cellfun(@(d, s) strcat(d, s), SampleDates, SampleSolvents, 'UniformOutput', false));
     % Keep only dates with more than one measurement
-    Idx = cellfun(@(x) 1 < sum(strcmp(SampleDates, x)), UniqueDates);
-    UniqueDates = UniqueDates(Idx);
+    Idx = cellfun(@(x) 1 < sum(strcmp(SampleDates, x)), SampleDates(UniqueIdx));
+    UniqueIdx = UniqueIdx(Idx);
+    UniqueDates = SampleDates(UniqueIdx);
     % Locate reference files
-    ReferenceFiles =  dir(fullfile(ReferenceFolder{1}, 'data', '*_qy_*'));
+    ReferenceFiles =  dir(fullfile(ReferenceFolder, 'data', '*_qy_*'));
     % Fetch reference dates
     [~, FileNames, ~] = cellfun(@(x) fileparts(x), {ReferenceFiles.name}, 'UniformOutput', false);
     FileNames = regexp(FileNames, '_', 'split');
@@ -73,14 +75,14 @@ function calculateQuantumYield(varargin)
     ReferenceAbsorption = cellfun(@(x) readAbs(x), AbsFiles, 'UniformOutput', false);
     ReferenceEmission = cellfun(@(x) readEm(x), EmFiles', 'UniformOutput', false);
     % Create results table
-    Results = cell2table(cell(length(UniqueDates), 5), 'VariableNames', {'Solvent', 'QuantumYield', 'RefCompound', 'RefSolvent', 'RefQuantumYield'});
+    Results = cell2table(cell(length(UniqueIdx), 5), 'VariableNames', {'Solvent', 'QuantumYield', 'RefCompound', 'RefSolvent', 'RefQuantumYield'});
     % Load physical property tables
     TableValuePath = fullfile(getenv('userprofile'), 'Documents', 'Matlab', 'SpecTools');
     QuantumYieldTable = readtable(fullfile(TableValuePath, 'ref_quantum_yield.csv'));
     RefractiveIndexTable = readtable(fullfile(TableValuePath, 'ref_refractive_index.csv'));
     % Calculate quantum yield for each experiment date
-    for i = 1:length(UniqueDates)
-        Date = UniqueDates{i};
+    for i = 1:length(UniqueIdx)
+        Date = SampleDates{UniqueIdx(i)};
         % Fetch reference information
         Idx = cellfun(@(x) contains(x.Title, Date), ReferenceAbsorption);
         Compound = unique(cellfun(@(x) x.Compound, ReferenceAbsorption(Idx), 'UniformOutput', false));
@@ -93,29 +95,24 @@ function calculateQuantumYield(varargin)
         ReferenceGradient = calculateGradient(ReferenceAbsorption(Idx), ReferenceEmission(Idx));
         % Fetch reference physical properties
         Idx = strcmp(QuantumYieldTable.Solvent, Solvent) & strcmp(QuantumYieldTable.Abbreviation, Compound);
-        assert(sum(Idx) == 1, 'Multiple Reference Quantum Yields Detected For Experiment %s', Date)
+        assert(sum(Idx) == 1, 'No Unique Reference Quantum Yield Known For Experiment %s', Date)
         Results.RefQuantumYield(i) = {QuantumYieldTable.QuantumYield(Idx)};
         Idx = strcmp(strrep(Solvent, ',', '.'), RefractiveIndexTable.Abbreviation);
-        assert(sum(Idx) == 1, 'Multiple Reference Refractive Indices Detected For Experiment %s', Date)
+        assert(sum(Idx) == 1, 'No Unique Reference Refractive Index Known For Experiment %s', Date)
         ReferenceRefractiveIndex = RefractiveIndexTable.RefractiveIndex(Idx);
         % Fetch sample information
-        Idx = cellfun(@(x) contains(x.Title, Date), SampleAbsorption);
-        Solvent = unique(cellfun(@(x) x.Solvent, SampleAbsorption(Idx), 'UniformOutput', false));
-        assert(length(Solvent) == 1, 'Multiple Sample Solvents Detected For Date %s', Date)
+        Solvent = SampleSolvents(UniqueIdx(i));
         Results.Solvent(i) = Solvent;
         Idx = strcmp(strrep(Solvent, ',', '.'), RefractiveIndexTable.Abbreviation);
-        assert(sum(Idx) == 1, 'Multiple Reference Refractive Indices Detected For Experiment %s', Date)
+        assert(sum(Idx) == 1, 'No Unique Reference Refractive Index Known For Experiment %s', Date)
         SampleRefractiveIndex = RefractiveIndexTable.RefractiveIndex(Idx);
         % Calculate sample gradient
-        Idx = cellfun(@(x) contains(x.Title, Date), SampleAbsorption);
-        Solvent = unique(cellfun(@(x) x.Solvent, SampleAbsorption(Idx), 'UniformOutput', false));
-        assert(length(Solvent) == 1, 'Multiple Sample Solvents Detected For Date %s', Date)
-        Results.Solvent(i) = Solvent;
+        Idx = cellfun(@(x) contains(x.Title, Date) & strcmp(x.Solvent, Solvent), SampleAbsorption);
         SampleGradient = calculateGradient(SampleAbsorption(Idx), SampleEmission(Idx));
         % Calculate sample quantum yield
         QuantumYield = Results.RefQuantumYield{i} * ( SampleGradient / ReferenceGradient ) * ( SampleRefractiveIndex^2 / ReferenceRefractiveIndex^2 );
         Results.QuantumYield(i) = {round(QuantumYield, 4, 'significant')};
     end
     % Save results
-    writetable(Results, fullfile(SampleFolder{1}, ['QY_results_ref_', ReferenceAbsorption{1}.Compound, '.csv']));
+    writetable(Results, fullfile(SampleFolder, ['QY_results_ref_', ReferenceAbsorption{1}.Compound, '.csv']));
 end
