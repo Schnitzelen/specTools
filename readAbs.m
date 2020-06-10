@@ -181,7 +181,8 @@ classdef readAbs < handle
             obj.Data.CorrectedAbsorption = Absorption;
         end
         function normalizeAbsorption(obj)
-            obj.Data.NormalizedAbsorption = obj.Data.Absorption / max(obj.Data.Absorption);
+            Idx = obj.PeakExpectedAbove <= obj.Data.Wavelength & obj.Data.Wavelength <= obj.PeakExpectedBelow;
+            obj.Data.NormalizedAbsorption = obj.Data.Absorption / max(obj.Data.Absorption(Idx));
         end
         function estimateSpectralRange(obj)
             if isempty(obj.Concentration) || obj.Concentration.Value == 0

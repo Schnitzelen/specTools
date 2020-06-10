@@ -1,47 +1,82 @@
-% By Brian Bjarke Jensen 15/1-2019
-
 classdef wrapAbs < handle
     % Class used for containing and organizing multiple absorption data-objects
     properties
         AbsoluteFolderPath
+        Solvent
         Results
         Raw
         Data
     end
     methods
-        function obj = wrapAbs(AbsoluteFolderPath)
+        function obj = wrapAbs(AbsoluteFolderPath, varargin)
             % Ask for folder, if none is provided
             if ~exist('AbsoluteFolderPath', 'var')
                 AbsoluteFolderPath = uigetdir(pwd(), 'Please Select Folder Containing Absorption Data to Import');
             end
             obj.AbsoluteFolderPath = AbsoluteFolderPath;
+            % Prepare arguments
+            Solvent = '*';
+            % Handle varargin
+            assert(rem(length(varargin), 2) == 0, 'Arguments Cannot Be Parsed');
+            for i = 1:2:length(varargin)
+                switch varargin{i}
+                    case 'Solvent'
+                        Solvent = varargin{i + 1};
+                        if isa(Solvent, 'char')
+                            Solvent = {Solvent};
+                        end
+                    otherwise
+                        error('Unknown Argument Passed: %s', varargin{i})
+                end
+            end
+            % If any arguments are not defined by now, prompt user
+            if isempty(Solvent)
+                %Solvent = 'MeOH TCM Tol';
+                Solvent = input('Please Specify Solvent(s) (separate multiple solvents by space): ', 's');
+                if contains(Solvent, ' ')
+                    Solvent = strsplit(Solvent, ' ');
+                elseif isa(Solvent, 'char')
+                    Solvent = {Solvent};
+                end
+            end
+            assert(~isempty(Solvent) && ~isempty(Solvent{1}), 'No Solvent Specified!')
+            obj.Solvent = Solvent;
+            % Carry on with work
             obj.importData();
             obj.buildRawTable();
             obj.buildResultsTable();
         end
         function importData(obj)
             % Get all abs-files in folder
-            D = dir(fullfile(obj.AbsoluteFolderPath, '**', '*_abs_*.*'));
-            % If more of the same measurement, keep only most recent
-            Info = regexp({D.name}.', '_', 'split');
+            FileList = listExperimentFilesInDir('AbsoluteFolder', obj.AbsoluteFolderPath, 'ExperimentType', 'abs');
+            % If more of the same measurement, keep only most recent of
+            % relevant solvent
+            [~, Info, ~] = cellfun(@(x) fileparts(x), FileList, 'UniformOutput', false);
+            Info = regexp(Info, '_', 'split');
             Info = vertcat(Info{:});
-            Solvents = Info(:, 3);
-            UniqueSolvents = unique(Solvents);
+            SampleSolvents = Info(:, 3);
             Dates = str2double(Info(:, 1));
-            RemoveIdx = false(length(D), 1);
-            for i = 1:length(UniqueSolvents)
-                SolventIdx = strcmp(Solvents, UniqueSolvents(i));
-                [MostRecentDate, ~] = max(Dates(SolventIdx));
-                DateIdx = MostRecentDate == Dates;
-                Idx = and(SolventIdx, ~DateIdx);
-                RemoveIdx(Idx) = 1;
+            KeepIdx = false(length(FileList), 1);
+            if strcmp(obj.Solvent, '*')
+                Solvent = unique(SampleSolvents);
+            else
+                Solvent = obj.Solvent;
             end
-            D(RemoveIdx, :) = [];
+            for i = 1:length(Solvent)
+                Idx = find(strcmp(SampleSolvents, Solvent{i}));
+                if 1 < length(Idx)
+                    [~, MaxDateIdx] = max(Dates(Idx));
+                    KeepIdx(Idx(MaxDateIdx)) = true;
+                else
+                    KeepIdx(Idx) = true;
+                end
+            end
+            FileList = FileList(KeepIdx);
             % Read files
-            obj.Data = arrayfun(@(x) readAbs(fullfile(x.folder, x.name)), D, 'UniformOutput', false);
+            obj.Data = cellfun(@(x) readAbs(x), FileList, 'UniformOutput', false);
             % If more than one file, sort according to polarity
-            if length(obj.Data) > 1
-                PolarityTable = readtable(fullfile(getenv('userprofile'), 'Documents', 'MATLAB\SpecTools\ref_polarity.csv'));
+            if 1 < length(obj.Data)
+                PolarityTable = readtable(fullfile(getenv('userprofile'), 'Documents', 'MATLAB', 'SpecTools', 'ref_polarity.csv'));
                 [~, PolaritySorting] = sort(cellfun(@(x) PolarityTable.RelativePolarity(strcmp(PolarityTable.Abbreviation, x.Solvent)), obj.Data), 'descend');
                 obj.Data = obj.Data(PolaritySorting);
             end

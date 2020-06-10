@@ -73,10 +73,24 @@ classdef readEm < handle
         function normalizeIntensity(obj)
             obj.Data.NormalizedIntensity = obj.Data.Intensity / max(obj.Data.Intensity);
         end
-        function estimateSpectralRange(obj)
+        function estimateSpectralRange(obj, varargin)
+            % Handle varargin
+            assert(rem(length(varargin), 2) == 0, 'Arguments Cannot Be Parsed');
+            for i = 1:2:length(varargin)
+                switch varargin{i}
+                    case 'PeakExpectedAbove'
+                        obj.PeakExpectedAbove = varargin{i + 1};
+                    case 'SpectralRangeThreshold'
+                        obj.SpectralRangeThreshold = varargin{i + 1};
+                    otherwise
+                        error('Unknown Argument Passed: %s', varargin{i})
+                end
+            end
+            % Make sure that fluorophor is present
             if isempty(obj.Concentration) || obj.Concentration.Value == 0
                 return
             end
+            % Calculate
             [Low, Peak, High] = determineSpectralRange(obj.Data.Wavelength, obj.Data.Intensity, 'Threshold', obj.SpectralRangeThreshold, 'PeakExpectedAbove', obj.PeakExpectedAbove);
             obj.SpectralRange.Min = Low;
             obj.SpectralRange.Peak = Peak;
@@ -85,6 +99,8 @@ classdef readEm < handle
         function CorrectionFactor = calculatePartialEmissionCorrectionFactor(obj, WavelengthMin, WavelengthMax)
             X = obj.Data.Wavelength;
             Y = obj.Data.Intensity;
+            assert(min(X) <= WavelengthMin & WavelengthMin <= max(X), 'Lower Wavelength Limit Is Outside Measured Wavelength Range!')
+            assert(min(X) <= WavelengthMax & WavelengthMax <= max(X), 'Upper Wavelength Limit Is Outside Measured Wavelength Range!')
             Idx = WavelengthMin <= X & X <= WavelengthMax;
             PartialEmission = trapz(X(Idx), Y(Idx));
             FullEmission = obj.IntegratedIntensity;
