@@ -8,7 +8,8 @@ function [Data, MetaData] = IfxFile(AbsoluteFileName)
     MetaData = vertcat(MetaData{:});
     MetaData = compileStructFromKeyValuePairs(MetaData(:, 1), MetaData(:, 2));
     % Parse data
-    ColumnNames = strrep(MetaData.Columns, 'EmissionWavelength', 'Wavelength');
+    assert(sum(contains(MetaData.Columns, 'Wavelength')) < 2)
+    ColumnNames = regexprep(MetaData.Columns, 'E(\w+)ionWavelength', 'Wavelength');
     ColumnNames = strsplit(ColumnNames, ',');
     Data = cell2table(num2cell(File.data), 'VariableNames', ColumnNames);
 end
