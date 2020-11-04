@@ -2,8 +2,8 @@ function specTools(varargin)
     % Prepare arguments
     %SampleFolder = {};
     %ReferenceFolder = '';
-    SampleFolder = 'C:\Users\schni\OneDrive - Syddansk Universitet\Samples\NR';
-    ReferenceFolder = 'C:\Users\schni\OneDrive - Syddansk Universitet\Samples\RhoB';
+    SampleFolder = strcat(getenv('userprofile'), '\OneDrive - Syddansk Universitet\Samples\NR');
+    ReferenceFolder = strcat(getenv('userprofile'), '\OneDrive - Syddansk Universitet\Samples\RhoB');
     % Handle varargin
     assert(rem(length(varargin), 2) == 0, 'Arguments Cannot Be Parsed');
     for i = 1:2:length(varargin)
