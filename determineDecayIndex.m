@@ -9,7 +9,7 @@ function DecayIndex = determineDecayIndex(Y)
         DecayIndex = true(SizeY);
     end
     % Locate part before excitation
-    PreDecayIdx = 1 : ( MaxIdx - 1 );
+    PreDecayIdx = 1 : ( MaxIdx + 3 );
     DecayIndex(PreDecayIdx) = false;
     % Locate flat part after tail
     Idx = max(SizeY);

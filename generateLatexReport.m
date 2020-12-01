@@ -20,22 +20,26 @@ function generateLatexReport(varargin)
     % Prepare report text
     Report = cell(0, 1);
     % If present, include image of structure
-    FileName = fullfile(SampleFolder, 'structure.jpg');
+    FileName = fullfile(SampleFolder, 'structure.png');
     if isfile(FileName)
         Report{end+1, 1} = ['The chemical structure of ', SampleName, ' is shown below.'];
         Report{end+1, 1} = '\begin{figure}';
         Report{end+1, 1} = '\centering';
-        Report{end+1, 1} = ['\includegraphics[width=0.5\textwidth]{', strrep(FileName, '\', '/'), '}'];
+        FileName = strsplit(FileName, filesep);
+        FileName = strjoin([{'..'}, FileName(end-2:end)], '/');
+        Report{end+1, 1} = ['\includegraphics[width=0.5\textwidth]{', FileName, '}'];
         Report{end+1, 1} = ['\caption{Chemical structure of ', SampleName, '.}'];
         Report{end+1, 1} = '\end{figure}';
     end
     % If present, include image of spectra
-    FileName = fullfile(SampleFolder, 'spectra.jpg');
+    FileName = fullfile(SampleFolder, 'spectra.png');
     if isfile(FileName)
         Report{end+1, 1} = ['The spectra of ', SampleName, ' are shown below.'];
         Report{end+1, 1} = '\begin{figure}';
         Report{end+1, 1} = '\centering';
-        Report{end+1, 1} = ['\includegraphics[width=\textwidth]{', strrep(FileName, '\', '/'), '}'];
+        FileName = strsplit(FileName, filesep);
+        FileName = strjoin([{'..'}, FileName(end-2:end)], '/');
+        Report{end+1, 1} = ['\includegraphics[width=\textwidth]{', FileName, '}'];
         Report{end+1, 1} = ['\caption{Excitation (dotted line), absorption (dashed line) and emission (full line) spectra of ', SampleName, '.}'];
         Report{end+1, 1} = '\end{figure}';
     end
@@ -46,7 +50,7 @@ function generateLatexReport(varargin)
         Report{end+1, 1} = '\begin{table}';
         Report{end+1, 1} = '\centering';
         Report{end+1, 1} = '\begin{tabular}{c | c c c c c c c c}';
-        Report{end+1, 1} = 'solvent & $\lambda_{ex}$ & $\Delta \lambda_{ex}$ & $\lambda_{abs}$ & $\Delta \lambda_{abs}$ & $\lambda_{em}$ & $\Delta \lambda_{em}$ & Stokes shift \\ \hline';
+        Report{end+1, 1} = 'solvent & rel. pol. & $\lambda_{ex}$ & $\Delta \lambda_{ex}$ & $\lambda_{abs}$ & $\Delta \lambda_{abs}$ & $\lambda_{em}$ & $\Delta \lambda_{em}$ & Stokes shift \\ \hline';
         T = readtable(FileName);
         NumCols = width(T);
         NumRows = height(T);
@@ -66,12 +70,14 @@ function generateLatexReport(varargin)
         Report{end+1, 1} = '\end{table}';
     end
     % If present, include plot of spectral results
-    FileName = fullfile(SampleFolder, 'spectral_results.jpg');
+    FileName = fullfile(SampleFolder, 'spectral_results.png');
     if isfile(FileName)
         Report{end+1, 1} = ['A normalized plot of the peak wavelengths of ', SampleName, ' relative to the polarity of the solvent is shown below.'];
         Report{end+1, 1} = '\begin{figure}';
         Report{end+1, 1} = '\centering';
-        Report{end+1, 1} = ['\includegraphics[width=\textwidth]{', strrep(FileName, '\', '/'), '}'];
+        FileName = strsplit(FileName, filesep);
+        FileName = strjoin([{'..'}, FileName(end-2:end)], '/');
+        Report{end+1, 1} = ['\includegraphics[width=\textwidth]{', FileName, '}'];
         Report{end+1, 1} = ['\caption{Normalized peak wavelengths of ', SampleName, ' relative to solvent polarity.}'];
         Report{end+1, 1} = '\end{figure}';
     end
@@ -123,7 +129,7 @@ function generateLatexReport(varargin)
         Report{end+1, 1} = '\end{table}';
     end
     % If present, include plot of 2P excitation
-    FileName = fullfile(SampleFolder, '2PEx.jpg');
+    FileName = fullfile(SampleFolder, '2PEx.png');
     if isfile(FileName)
         Report{end+1, 1} = ['The two-photon excitation spectra of ', SampleName, ' are shown below.'];
         Report{end+1, 1} = '\begin{figure}';
@@ -135,7 +141,7 @@ function generateLatexReport(varargin)
     % Save report
     Report = regexprep(Report, '\\', '\\\\'); % Convert single backslash
     Report = join(Report, '\n'); % Add newline characters
-    FileName = fullfile(SampleFolder, 'spectroscopic_report.txt');
+    FileName = fullfile(SampleFolder, 'spectroscopic_report.tex');
     FID = fopen(FileName, 'w');
     fprintf(FID, Report{1});
     fclose(FID);

@@ -68,8 +68,9 @@ classdef readAbs < handle
         function importData(obj)
             % Determine importer to use
             [~, ~, Ext] = fileparts(obj.AbsoluteFileName);
+            Ext = lower(Ext);
             switch Ext
-                case '.TXT'
+                case '.txt'
                     obj.Importer = @TxtFile;
                 case '.csv'
                     obj.Importer = @CsvFile;

@@ -29,6 +29,12 @@ function Results = calculateQuantumYield(varargin)
     SampleEmFiles = listExperimentFilesInDir('AbsoluteFolder', fullfile(SampleFolder, 'data'), 'ExperimentType', 'qy', 'FileExtension', 'ifx');
     ReferenceAbsFiles = listExperimentFilesInDir('AbsoluteFolder', fullfile(ReferenceFolder, 'data'), 'ExperimentType', 'qy', 'FileExtension', 'TXT');
     ReferenceEmFiles = listExperimentFilesInDir('AbsoluteFolder', fullfile(ReferenceFolder, 'data'), 'ExperimentType', 'qy', 'FileExtension', 'ifx');
+    % sample abs-em pairs
+    % isolate unique experiment date-replicate
+    % locate reference files from same experiment date-replicate
+    % 
+    
+    
     % Remove sample files that do not come in abs-em pairs
     [~, SampleAbsFileNames, ~] = cellfun(@fileparts, SampleAbsFiles, 'UniformOutput', false);
     [~, SampleEmFileNames, ~] = cellfun(@fileparts, SampleEmFiles, 'UniformOutput', false);
@@ -102,14 +108,14 @@ function Results = calculateQuantumYield(varargin)
     % Import samples
     SampleAbsorption = cell(length(SampleAbsFiles), 1);
     SampleEmission = cell(length(SampleEmFiles), 1);
-    parfor i = 1:length(SampleAbsFiles)
+    for i = 1:length(SampleAbsFiles)
         SampleAbsorption{i} = readAbs(SampleAbsFiles{i});
         SampleEmission{i} = readEm(SampleEmFiles{i});
     end
     % Import references
     ReferenceAbsorption = cell(length(ReferenceAbsFiles), 1);
     ReferenceEmission = cell(length(ReferenceEmFiles), 1);
-    parfor i = 1:length(ReferenceAbsFiles)
+    for i = 1:length(ReferenceAbsFiles)
         ReferenceAbsorption{i} = readAbs(ReferenceAbsFiles{i});
         ReferenceEmission{i} = readEm(ReferenceEmFiles{i});
     end

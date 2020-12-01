@@ -58,5 +58,5 @@ function Results = calculateMolarAttenuation(varargin)
         Results.MolarAttenuationCoefficient{i} = round(Fit.a, 4, 'significant');
     end
     % Save results
-    writetable(Results, fullfile(SampleFolder, 'MAC_results'));
+    writetable(Results, fullfile(SampleFolder, 'MAC_results.csv'));
 end

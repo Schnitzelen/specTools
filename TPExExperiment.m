@@ -80,7 +80,7 @@ classdef TPExExperiment < handle
         function importReferenceData(obj)
             DataFolder = fullfile(obj.ReferenceFolder, 'data');
             ReferenceFiles = listExperimentFilesInDir('AbsoluteFolder', DataFolder, 'ExperimentType', '2pa');
-            ReferenceDate = regexp(ReferenceFiles, '(?<=data\\).+?(?=_)', 'match');
+            ReferenceDate = regexp(ReferenceFiles, '(?<=data\\)[\d,\-]+?(?=_)', 'match');
             ReferenceDate = vertcat(ReferenceDate{:});
             Idx = strcmp(ReferenceDate, obj.Date);
             assert(any(Idx), 'No Reference Data Located For %s', obj.Title)
