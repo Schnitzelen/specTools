@@ -1,6 +1,6 @@
 function Results = collectLifetimeData(varargin)
     % Prepare arguments
-    SampleFolder = '';
+    %SampleFolder = '';
     % Handle varargin
     assert(rem(length(varargin), 2) == 0, 'Arguments Cannot Be Parsed');
     for i = 1:2:length(varargin)

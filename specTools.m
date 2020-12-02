@@ -23,6 +23,9 @@ function specTools(varargin)
         ReferenceFolder = uigetdir(pwd(), 'Please Select Folder Containing Reference Data');
     end
     assert(ischar(ReferenceFolder), 'No Reference Folder Selected!');
+    % Load polarity table values
+    PolarityTable = readtable(fullfile(getenv('userprofile'), 'Documents', 'MATLAB', 'SpecTools', 'ref_polarity.csv'));
+    % Set working folder name
     FolderName = strsplit(SampleFolder, filesep);
     FolderName = FolderName{end};
     fprintf('WORKING ON FOLDER: %s\n', FolderName);
@@ -45,7 +48,6 @@ function specTools(varargin)
     % Determine solvents to plot
     fprintf('DETERMINING SOLVENTS TO PLOT\n');
     UniqueSolvents = unique(vertcat(cellfun(@(x) x.Solvent, AbsData, 'UniformOutput', false), cellfun(@(x) x.Solvent, ExData, 'UniformOutput', false), cellfun(@(x) x.Solvent, EmData, 'UniformOutput', false)));
-    PolarityTable = readtable(fullfile(getenv('userprofile'), 'Documents', 'MATLAB', 'SpecTools', 'ref_polarity.csv'));
     if 1 < length(UniqueSolvents)
         [~, PolaritySorting] = sort(cellfun(@(x) PolarityTable.RelativePolarity(strcmp(PolarityTable.Abbreviation, x)), UniqueSolvents), 'ascend');
         UniqueSolvents = UniqueSolvents(PolaritySorting);
@@ -64,7 +66,9 @@ function specTools(varargin)
         Idx = cellfun(@(x) strcmp(x.Solvent, Solvent), AbsData);
         plot(AbsData{Idx}.Data.Wavelength, AbsData{Idx}.Data.NormalizedAbsorption, '--', 'Color', Color, 'HandleVisibility', 'off')
         Idx = cellfun(@(x) strcmp(x.Solvent, Solvent), ExData);
-        plot(ExData{Idx}.Data.Wavelength, ExData{Idx}.Data.NormalizedIntensity, ':', 'Color', Color, 'HandleVisibility', 'off')
+        if sum(Idx) > 0
+            plot(ExData{Idx}.Data.Wavelength, ExData{Idx}.Data.NormalizedIntensity, ':', 'Color', Color, 'HandleVisibility', 'off')
+        end
         Idx = cellfun(@(x) strcmp(x.Solvent, Solvent), EmData);
         plot(EmData{Idx}.Data.Wavelength, EmData{Idx}.Data.NormalizedIntensity, '-', 'Color', Color, 'DisplayName', Solvent)
     end
@@ -81,9 +85,11 @@ function specTools(varargin)
     SpectralResultsTable.RelativePolarity = cellfun(@(x) PolarityTable.RelativePolarity(strcmp(PolarityTable.Abbreviation, x)), UniqueSolvents);
     SpectralResultsTable = sortrows(SpectralResultsTable, 2, 'ascend');
     %
-    ExSolvents = cellfun(@(x) x.Solvent, ExData, 'UniformOutput', false);
-    SpectralResultsTable.ExPeak = round(cellfun(@(x) ExData{(strcmp(ExSolvents, x))}.SpectralRange.Peak, SpectralResultsTable.Solvent));
-    SpectralResultsTable.DeltaExPeak = arrayfun(@(x) x - SpectralResultsTable.ExPeak(1), SpectralResultsTable.ExPeak);
+    if ~isempty(ExData)
+        ExSolvents = cellfun(@(x) x.Solvent, ExData, 'UniformOutput', false);
+        SpectralResultsTable.ExPeak = round(cellfun(@(x) ExData{(strcmp(ExSolvents, x))}.SpectralRange.Peak, SpectralResultsTable.Solvent));
+        SpectralResultsTable.DeltaExPeak = arrayfun(@(x) x - SpectralResultsTable.ExPeak(1), SpectralResultsTable.ExPeak);
+    end
     %
     AbsSolvents = cellfun(@(x) x.Solvent, AbsData, 'UniformOutput', false);
     SpectralResultsTable.AbsPeak = round(cellfun(@(x) AbsData{(strcmp(AbsSolvents, x))}.SpectralRange.Peak, SpectralResultsTable.Solvent));
@@ -109,7 +115,9 @@ function specTools(varargin)
     yyaxis left
     ylabel('wavelength (nm)', 'Interpreter', 'latex');
     ylim([500, 650]);
-    plot(SpectralResultsTable.RelativePolarity, SpectralResultsTable.ExPeak, 'bo:', 'DisplayName', 'Excitation')
+    if ~iscell(SpectralResultsTable.ExPeak)
+        plot(SpectralResultsTable.RelativePolarity, SpectralResultsTable.ExPeak, 'bo:', 'DisplayName', 'Excitation')
+    end
     plot(SpectralResultsTable.RelativePolarity, SpectralResultsTable.AbsPeak, 'bo--', 'DisplayName', 'Absorption')
     plot(SpectralResultsTable.RelativePolarity, SpectralResultsTable.EmPeak, 'bo-', 'DisplayName', 'Emission')
     yyaxis right
@@ -126,7 +134,7 @@ function specTools(varargin)
     FLIMData = collectLifetimeData('SampleFolder', SampleFolder);
     FLIMResults = cell2table(cell(length(unique(FLIMData.Solvent)), 3), 'VariableNames', {'Solvent', 'MeanLifetime', 'SDLifetime'});
     FLIMResults.Solvent = unique(FLIMData.Solvent);
-    [~, PolaritySorting] = sort(cellfun(@(x) PolarityTable.RelativePolarity(strcmp(PolarityTable.Abbreviation, x)), FLIMResults.Solvent), 'descend');
+    [~, PolaritySorting] = sort(cellfun(@(x) PolarityTable.RelativePolarity(strcmp(PolarityTable.Abbreviation, x)), FLIMResults.Solvent), 'ascend');
     FLIMResults.Solvent = FLIMResults.Solvent(PolaritySorting);
     SolventIdx = cellfun(@(x) strcmp(FLIMData.Solvent, x), FLIMResults.Solvent, 'UniformOutput', false);
     FLIM = cellfun(@(x) FLIMData.MeanT1(x), SolventIdx, 'UniformOutput', false);
@@ -136,26 +144,30 @@ function specTools(varargin)
     % Calculate quantum yield results
     fprintf('IMPORTING QUANTUM YIELD DATA: ');
     QYData = calculateQuantumYield('SampleFolder', SampleFolder, 'ReferenceFolder', ReferenceFolder);
+    %if ~isempty(QYData)
     QYResults = cell2table(cell(length(unique(QYData.Solvent)), 3), 'VariableNames', {'Solvent', 'MeanQY', 'SDQY'});
     QYResults.Solvent = unique(QYData.Solvent);
-    [~, PolaritySorting] = sort(cellfun(@(x) PolarityTable.RelativePolarity(strcmp(PolarityTable.Abbreviation, x)), QYResults.Solvent), 'descend');
+    [~, PolaritySorting] = sort(cellfun(@(x) PolarityTable.RelativePolarity(strcmp(PolarityTable.Abbreviation, x)), QYResults.Solvent), 'ascend');
     QYResults.Solvent = QYResults.Solvent(PolaritySorting);
     SolventIdx = cellfun(@(x) strcmp(QYData.Solvent, x), QYResults.Solvent, 'UniformOutput', false);
     QY = cellfun(@(x) QYData.QuantumYield(x), SolventIdx, 'UniformOutput', false);
-    QYResults.MeanQY = cellfun(@(x) round(mean(cell2mat(x)), 4, 'significant'), QY, 'UniformOutput', false);
-    QYResults.SDQY = cellfun(@(x) round(std(cell2mat(x)), 4, 'significant'), QY, 'UniformOutput', false);
+    QYResults.MeanQY = cellfun(@(x) round(mean(x), 4, 'significant'), QY, 'UniformOutput', false);
+    QYResults.SDQY = cellfun(@(x) round(std(x), 4, 'significant'), QY, 'UniformOutput', false);
+    %end
     fprintf('DONE\n');
     % Calculate molar attenuation coefficient results
     fprintf('IMPORTING MOLAR ATTENUATION DATA: ');
     MACData = calculateMolarAttenuation('SampleFolder', SampleFolder);
+    %if ~isempty(MACData)
     MACResults = cell2table(cell(length(unique(MACData.Solvent)), 3), 'VariableNames', {'Solvent', 'MeanMAC', 'SDMAC'});
     MACResults.Solvent = unique(MACData.Solvent);
-    [~, PolaritySorting] = sort(cellfun(@(x) PolarityTable.RelativePolarity(strcmp(PolarityTable.Abbreviation, x)), MACResults.Solvent), 'descend');
+    [~, PolaritySorting] = sort(cellfun(@(x) PolarityTable.RelativePolarity(strcmp(PolarityTable.Abbreviation, x)), MACResults.Solvent), 'ascend');
     MACResults.Solvent = MACResults.Solvent(PolaritySorting);
     SolventIdx = cellfun(@(x) strcmp(MACData.Solvent, x), MACResults.Solvent, 'UniformOutput', false);
     MAC = cellfun(@(x) MACData.MolarAttenuationCoefficient(x), SolventIdx, 'UniformOutput', false);
     MACResults.MeanMAC = cellfun(@(x) round(mean(cell2mat(x)), 4, 'significant'), MAC, 'UniformOutput', false);
     MACResults.SDMAC = cellfun(@(x) round(std(cell2mat(x)), 4, 'significant'), MAC, 'UniformOutput', false);
+   % end
     fprintf('DONE\n');
     % Build physical properties table
     fprintf('BUILDING PHYSICAL PROPERTIES TABLE: ');
@@ -184,28 +196,28 @@ function specTools(varargin)
     FileName = fullfile(SampleFolder, 'physical_properties.csv');
     writetable(PhysicalPropertiesTable, FileName)
     fprintf('DONE\n');
-    % Collect two-photon excitation results
-    fprintf('IMPORTING TWO-PHOTON EXCITATION DATA: ');
-    [TPEData, ReferenceName] = collectTwoPhotonExcitationData('SampleFolder', SampleFolder, 'ReferenceFolder', ReferenceFolder);
-    fprintf('DONE\n');
-    % Plot two-photon excitation spectra
-    fprintf('PLOTTING TWO-PHOTON EXCITATION SPECTRA: ');
-    Fig = figure;
-    hold on
-    xlabel('wavelength (nm)', 'Interpreter', 'latex')
-    ylabel('$\phi_{f} \cdot \sigma_{2P}$ (GM)', 'Interpreter', 'latex')
-    plot(TPEData.Wavelength, TPEData.ReferenceTPA, 'bo-', 'DisplayName', ReferenceName);
-    Solvent = regexp(TPEData.Properties.VariableNames(3:2:end), '(?<=^Mean).+$', 'match');
-    Solvent = horzcat(Solvent{:});
-    MeanAP = TPEData{:, 3:2:end};
-    SDAP = TPEData{:, 4:2:end};
-    for i = 1:length(Solvent)
-        errorbar(TPEData.Wavelength, MeanAP(:, i), SDAP(:, i), 'DisplayName', Solvent{i});
-    end
-    legend({}, 'Interpreter', 'latex')
-    FileName = fullfile(SampleFolder, '2PEx');
-    print(Fig, FileName, '-dpng')
-    fprintf('DONE\n');
+%     % Collect two-photon excitation results
+%     fprintf('IMPORTING TWO-PHOTON EXCITATION DATA: ');
+%     [TPEData, ReferenceName] = collectTwoPhotonExcitationData('SampleFolder', SampleFolder, 'ReferenceFolder', ReferenceFolder);
+%     fprintf('DONE\n');
+%     % Plot two-photon excitation spectra
+%     fprintf('PLOTTING TWO-PHOTON EXCITATION SPECTRA: ');
+%     Fig = figure;
+%     hold on
+%     xlabel('wavelength (nm)', 'Interpreter', 'latex')
+%     ylabel('$\phi_{f} \cdot \sigma_{2P}$ (GM)', 'Interpreter', 'latex')
+%     plot(TPEData.Wavelength, TPEData.ReferenceTPA, 'bo-', 'DisplayName', ReferenceName);
+%     Solvent = regexp(TPEData.Properties.VariableNames(3:2:end), '(?<=^Mean).+$', 'match');
+%     Solvent = horzcat(Solvent{:});
+%     MeanAP = TPEData{:, 3:2:end};
+%     SDAP = TPEData{:, 4:2:end};
+%     for i = 1:length(Solvent)
+%         errorbar(TPEData.Wavelength, MeanAP(:, i), SDAP(:, i), 'DisplayName', Solvent{i});
+%     end
+%     legend({}, 'Interpreter', 'latex')
+%     FileName = fullfile(SampleFolder, '2PEx');
+%     print(Fig, FileName, '-dpng')
+%     fprintf('DONE\n');
 %     % Generate latex report
 %     fprintf('GENERATING LATEX REPORT: ');
 %     generateLatexReport('SampleFolder', SampleFolder);
